@@ -129,7 +129,8 @@ class SamplingSession:
 
         # Pre-allocate mask buffer once for this step (reused every token)
         vocab_size = self._engine._tokenizer.vocab_size()
-        mask_buf = torch.empty(vocab_size, dtype=torch.bool)
+        dev = next(self._engine._model.parameters()).device
+        mask_buf = torch.empty(vocab_size, dtype=torch.bool, device=dev)
 
         initial_kv = self._engine._initial_kv  # cached — no model call
 
@@ -137,9 +138,9 @@ class SamplingSession:
             past_kv = None
             while not state.complete() and self.gen_count < max_gen_tokens:
                 if past_kv is None:
-                    ctx = torch.tensor([state.context_tokens()], dtype=torch.long)
+                    ctx = torch.tensor([state.context_tokens()], dtype=torch.long, device=dev)
                 else:
-                    ctx = torch.tensor([[state.context_tokens()[-1]]], dtype=torch.long)
+                    ctx = torch.tensor([[state.context_tokens()[-1]]], dtype=torch.long, device=dev)
 
                 t_fwd = time.perf_counter()
                 try:
@@ -162,7 +163,7 @@ class SamplingSession:
                 past_kv = outputs[1] if len(outputs) > 1 else None
 
                 # Reuse pre-allocated bool buffer for grammar mask
-                mask_buf.copy_(torch.as_tensor(state.logit_mask(), dtype=torch.bool))
+                mask_buf.copy_(torch.as_tensor(state.logit_mask(), dtype=torch.bool, device=dev))
                 n_legal = int(mask_buf.sum().item())
                 if n_legal == 0:
                     raise RuntimeError(

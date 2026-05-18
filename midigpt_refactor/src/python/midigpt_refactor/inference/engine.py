@@ -49,6 +49,7 @@ class InferenceEngine:
             trf    = self._model.transformer
             n_embd = trf.wte.weight.shape[1]
             n_layer = sum(1 for _ in trf.h.children())
+            dev    = next(self._model.parameters()).device
         except Exception:
             return None
 
@@ -57,14 +58,14 @@ class InferenceEngine:
                 continue
             head_dim = n_embd // n_head
             kv = tuple(
-                (torch.zeros(1, n_head, 0, head_dim),
-                 torch.zeros(1, n_head, 0, head_dim))
+                (torch.zeros(1, n_head, 0, head_dim, device=dev),
+                 torch.zeros(1, n_head, 0, head_dim, device=dev))
                 for _ in range(n_layer)
             )
             try:
                 with torch.no_grad():
                     # also triggers JIT compilation for this input shape
-                    self._model(torch.tensor([[0]], dtype=torch.long), kv)
+                    self._model(torch.tensor([[0]], dtype=torch.long, device=dev), kv)
                 return kv
             except Exception:
                 continue
