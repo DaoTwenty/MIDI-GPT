@@ -31,7 +31,8 @@ module load arrow/19.0.1
 
 PROJECT="$HOME/projects/def-pasquier/$USER/MIDI-GPT"
 VENV="$HOME/scratch/MIDI-GPT/.venv"
-DATA_DIR="$SCRATCH/MIDI-GPT/data/v2.0.0"
+DATA_ROOT="$SCRATCH/MIDI-GPT/data"
+DATA_DIR="$DATA_ROOT/v2.0.0"
 export HF_DATASETS_CACHE="$SCRATCH/huggingface/datasets"
 export MIDIGPT_CACHE="$SCRATCH/MIDI-GPT/.midigpt"
 RUN_ID="yellow-$(date +%Y%m%d-%H%M%S)"
@@ -60,15 +61,15 @@ mkdir -p "$OUTPUT_DIR"
 
 if [ ! -d "$DATA_DIR/train" ]; then
     echo "Downloading GigaMIDI v2.0.0 …"
-    python3 - << 'PYEOF'
+    DATA_ROOT="$DATA_ROOT" python3 - << 'PYEOF'
 import os
 from huggingface_hub import snapshot_download
 snapshot_download(
     repo_id="Metacreation/GigaMIDI",
     repo_type="dataset",
-    revision="v2.0.0",
-    local_dir=os.environ["DATA_DIR"],
-    ignore_patterns=["*.md", "*.txt"],
+    revision="main",
+    local_dir=os.environ["DATA_ROOT"],
+    allow_patterns=["v2.0.0/**"],
 )
 PYEOF
 fi
