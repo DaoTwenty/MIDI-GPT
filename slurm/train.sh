@@ -1,5 +1,4 @@
 #!/bin/bash
-set -e
 # ─────────────────────────────────────────────────────────────────────────────
 # Generic MidiGPT training job — single H100 (80 GB), 3 days.
 #
@@ -8,10 +7,7 @@ set -e
 #   sbatch slurm/train.sh slurm/configs/yellow_h100_small.json
 #   sbatch slurm/train.sh slurm/configs/yellow_h100_medium.json
 #
-# Preprocess once on a login/CPU node before submitting:
-#   python -m midigpt.training.preprocess \
-#       --parquet "$SCRATCH/MIDI-GPT/data/v2.0.0/train/*.parquet" \
-#       --encoder-config models/yellow_encoder.json
+# Preprocess once before submitting (see slurm/preprocess.sh).
 # ─────────────────────────────────────────────────────────────────────────────
 
 #SBATCH --account=def-pasquier
@@ -21,6 +17,8 @@ set -e
 #SBATCH --mem=48G
 #SBATCH --output=slurm/logs/%x-%j.out
 #SBATCH --error=slurm/logs/%x-%j.err
+
+set -e
 
 CONFIG="${1:?Usage: sbatch slurm/train.sh <config.json>}"
 

@@ -1,5 +1,4 @@
 #!/bin/bash
-set -e
 # ─────────────────────────────────────────────────────────────────────────────
 # Pre-compute valid-index cache for all GigaMIDI v2.0.0 train shards.
 #
@@ -17,6 +16,8 @@ set -e
 #SBATCH --output=slurm/logs/%x-%j.out
 #SBATCH --error=slurm/logs/%x-%j.err
 #SBATCH --job-name=midigpt-preprocess
+
+set -e
 
 # ── environment ───────────────────────────────────────────────────────────────
 

@@ -1,5 +1,4 @@
 #!/bin/bash
-set -e
 # ─────────────────────────────────────────────────────────────────────────────
 # Train yellow encoder (default GPT-2) on full GigaMIDI v2.0.0 — 3 days
 #
@@ -9,10 +8,7 @@ set -e
 #          --export=ALL,GPU_TIER=40gb \
 #          slurm/train_yellow.sh              # A100 40 GB MIG slice
 #
-# Before submitting, download GigaMIDI and run preprocess on a login/CPU node:
-#   python -m midigpt.training.preprocess \
-#       --parquet "$SCRATCH/MIDI-GPT/data/v2.0.0/train/*.parquet" \
-#       --encoder-config models/yellow_encoder.json
+# Preprocess once before submitting (see slurm/preprocess.sh).
 # ─────────────────────────────────────────────────────────────────────────────
 
 #SBATCH --account=def-pasquier
@@ -23,6 +19,8 @@ set -e
 #SBATCH --output=%x-%j.out
 #SBATCH --error=%x-%j.err
 #SBATCH --job-name=midigpt-yellow
+
+set -e
 
 # ── environment ───────────────────────────────────────────────────────────────
 
