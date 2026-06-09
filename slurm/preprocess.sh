@@ -27,7 +27,7 @@ module load arrow/19.0.1
 PROJECT="$HOME/projects/def-pasquier/$USER/MIDI-GPT"
 VENV="$HOME/scratch/MIDI-GPT/.venv"
 DATA_DIR="$SCRATCH/MIDI-GPT/data/v2.0.0"
-export MIDIGPT_CACHE="$SCRATCH/MIDI-GPT/.midigpt"
+export MIDIGPT_CACHE="$SCRATCH/.midigpt"
 
 source "$VENV/bin/activate"
 cd "$PROJECT"

@@ -32,7 +32,7 @@ VENV="$HOME/scratch/MIDI-GPT/.venv"
 DATA_ROOT="$SCRATCH/MIDI-GPT/data"
 DATA_DIR="$DATA_ROOT/v2.0.0"
 export HF_DATASETS_CACHE="$SCRATCH/huggingface/datasets"
-export MIDIGPT_CACHE="$SCRATCH/MIDI-GPT/.midigpt"
+export MIDIGPT_CACHE="$SCRATCH/.midigpt"
 
 CONFIG_NAME=$(basename "$CONFIG" .json)
 RUN_ID="${CONFIG_NAME}-$(date +%Y%m%d-%H%M%S)"
