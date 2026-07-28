@@ -668,8 +668,6 @@ class SamplingSession:
         # in mask_buf after the grammar mask loads — they never enter the
         # sampling distribution regardless of model conditioning.
         # Same for VelocityLevel when velocity=False.
-        import midigpt._core as _core
-
         def _tok_range(tt: "_core.TokenType"):
             s, e = self._engine._tokenizer._vocab.range(tt)
             return (s, e) if s >= 0 and e > s else None

@@ -678,4 +678,4 @@ def validate_request(
             "request requires infill but encoder config has supports_infill=false"
         )
 
-    return GenerationRequest(tracks=request.tracks, config=cfg)
+    return GenerationRequest(tracks=request.tracks, config=cfg, controls=request.controls)
