@@ -13,6 +13,11 @@ section above `[Unreleased]` before tagging.
 
 ## [0.3.3] - 2026-07-28
 
+### Fixed
+- **Piece-level controls propagation:** `validate_request` was returning a new `GenerationRequest` without the `controls` field, silently dropping `microtiming`/`velocity` controls before they reached the sampling session. Controls are now forwarded correctly.
+- **Hard vocab block (`microtiming=False`, `velocity=False`):** When piece-level controls disable microtiming or velocity, `Delta`/`DeltaDirection`/`VelocityLevel` token IDs are now force-zeroed in the grammar mask buffer at every sampling step, unconditionally excluding them from the distribution. Previously, the controls only added conditioning tokens with no effect on sampling.
+- **`UnboundLocalError` in `_sample_step`:** Inline `import midigpt._core as _core` inside the function shadowed the module-level import, causing `UnboundLocalError` on Python 3.12. Removed the redundant local import.
+
 ### Changed
 - **Simplified `from_pretrained` API:** `InferenceEngine.from_pretrained(name, hf_repo=...)` now takes the exact checkpoint filename prefix (e.g. `yellow_medium`, `prism_medium`, `expressive_medium`) and an optional `hf_repo` argument (default: `Metacreation/MIDI-GPT`). The `_MODEL_PREFIXES` alias table is removed — unknown names are passed directly to the HuggingFace repo without error.
 - **`midigpt-http` CLI:** `--hf-filename` replaced by `--hf-repo` (default: `Metacreation/MIDI-GPT`). `--pretrained` now documents that it expects the exact checkpoint prefix, not a short alias. `--ckpt` help updated to reflect `.safetensors` as the primary format.
