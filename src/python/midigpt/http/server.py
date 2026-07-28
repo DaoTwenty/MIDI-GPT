@@ -6,17 +6,19 @@ holds no per-session state. The only shared state is the loaded model
 
 Usage::
 
-    # Local checkpoint
+    # HuggingFace pretrained checkpoint (downloads and caches automatically)
+    midigpt-http --pretrained yellow_medium --port 8000
+    midigpt-http --pretrained prism_medium --port 8000
+    midigpt-http --pretrained expressive_medium --port 8000
+
+    # Custom HuggingFace repo
+    midigpt-http --pretrained my_model --hf-repo myorg/myrepo --port 8000
+
+    # Local checkpoint (.safetensors)
     midigpt-http --ckpt models/yellow_medium-final.safetensors --port 8000
 
-    # HuggingFace pretrained name
-    midigpt-http --pretrained yellow --port 8000
-
-    # HuggingFace repo + filename
-    midigpt-http --pretrained Metacreation/MIDI-GPT --hf-filename yellow_medium-final.safetensors
-
     # Auto-shutdown after 10 minutes of inactivity
-    midigpt-http --pretrained yellow --idle-timeout 600
+    midigpt-http --pretrained yellow_medium --idle-timeout 600
 
 Endpoints
 ---------
@@ -205,18 +207,22 @@ def _parse_args() -> argparse.Namespace:
     model_grp.add_argument(
         "--ckpt",
         metavar="PATH",
-        help="Path to a local .pt bundle or checkpoint directory",
+        help="Path to a local .safetensors checkpoint file or checkpoint directory",
     )
     model_grp.add_argument(
         "--pretrained",
-        metavar="NAME_OR_REPO",
-        help='Pretrained model name ("yellow", "yellow_small", "prism_medium", "expressive") or HuggingFace repo ID',
+        metavar="NAME",
+        help=(
+            "Checkpoint filename prefix on HuggingFace (e.g. yellow_medium, prism_medium, "
+            "expressive_medium). Downloads from --hf-repo (default: Metacreation/MIDI-GPT) "
+            "and caches locally."
+        ),
     )
     p.add_argument(
-        "--hf-filename",
-        metavar="FILE",
-        default=None,
-        help="Filename within the HuggingFace repo (required when --pretrained is a repo ID)",
+        "--hf-repo",
+        metavar="REPO",
+        default="Metacreation/MIDI-GPT",
+        help="HuggingFace repo ID to download from (default: Metacreation/MIDI-GPT)",
     )
     p.add_argument(
         "--device",
@@ -256,11 +262,14 @@ def main() -> None:
         engine = InferenceEngine.from_checkpoint(str(path), device=args.device)
         label = args.ckpt
     else:
-        log.info("Loading pretrained: %s (device=%s)", args.pretrained, args.device or "auto")
-        engine = InferenceEngine.from_pretrained(
-            args.pretrained, filename=args.hf_filename, device=args.device
+        log.info(
+            "Loading pretrained: %s from %s (device=%s)",
+            args.pretrained, args.hf_repo, args.device or "auto",
         )
-        label = args.pretrained + (f"/{args.hf_filename}" if args.hf_filename else "")
+        engine = InferenceEngine.from_pretrained(
+            args.pretrained, hf_repo=args.hf_repo, device=args.device
+        )
+        label = f"{args.hf_repo}/{args.pretrained}"
 
     server = HttpServer(engine, checkpoint_label=label, idle_timeout=args.idle_timeout)
     log.info("Starting HTTP server on %s:%d", args.host, args.port)

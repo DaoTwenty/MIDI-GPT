@@ -11,22 +11,7 @@ if TYPE_CHECKING:
     from midigpt.inference.config import GenerationRequest
     from midigpt.inference.session import SamplingSession
 
-HF_REPO_ID = "Metacreation/MIDI-GPT"
-
-# Short name -> checkpoint filename prefix on the HF repo. Checkpoints are
-# uploaded as "<prefix>-final.safetensors" (completed training) or
-# "<prefix>-step<N>.safetensors" (in-progress snapshot); the actual filename
-# is resolved at load time via _resolve_checkpoint_filename so this map never
-# needs updating when a new checkpoint is pushed. Bare "yellow"/"expressive"
-# alias to their medium variant for backward compatibility.
-_MODEL_PREFIXES: dict[str, str] = {
-    "yellow": "yellow_medium",
-    "yellow_small": "yellow_small",
-    "yellow_medium": "yellow_medium",
-    "expressive": "expressive_medium",
-    "expressive_medium": "expressive_medium",
-    "prism_medium": "prism_medium",
-}
+_DEFAULT_HF_REPO = "Metacreation/MIDI-GPT"
 
 _STEP_RE = re.compile(r"-step(\d+)\.safetensors$")
 
@@ -65,48 +50,37 @@ class InferenceEngine:
     @classmethod
     def from_pretrained(
         cls,
-        name_or_repo_id: str,
-        filename: str | None = None,
+        name: str,
+        hf_repo: str = _DEFAULT_HF_REPO,
         analyzer: AttributeAnalyzer | None = None,
         device: str | None = None,
     ) -> InferenceEngine:
-        """Load a model by name or HuggingFace repo ID.
+        """Load a model from HuggingFace Hub.
 
-        Short names resolve to files in the official repo::
+        ``name`` is the checkpoint filename prefix on the repo, e.g.
+        ``yellow_medium``, ``prism_medium``, ``expressive_medium``.
+        The actual filename is resolved dynamically — prefers
+        ``<name>-final.safetensors``, falls back to the highest-step snapshot.
 
-            engine = InferenceEngine.from_pretrained("yellow")
-            engine = InferenceEngine.from_pretrained("expressive")
-
-        A full repo ID with an explicit filename also works::
-
-            engine = InferenceEngine.from_pretrained(
-                "Metacreation/MIDI-GPT", filename="yellow_medium-final.safetensors"
-            )
+        ``hf_repo`` defaults to ``Metacreation/MIDI-GPT``. Pass a custom repo
+        ID to load from a different HuggingFace repository.
 
         The file is downloaded once and cached by ``huggingface_hub`` in
         ``~/.cache/huggingface/hub/``.
+
+        Examples::
+
+            engine = InferenceEngine.from_pretrained("yellow_medium")
+            engine = InferenceEngine.from_pretrained("prism_medium")
+            engine = InferenceEngine.from_pretrained("my_model", hf_repo="myorg/myrepo")
         """
         try:
             from huggingface_hub import hf_hub_download
         except ImportError:
             raise ImportError("pip install midigpt[inference] to enable HF Hub downloads") from None
 
-        if name_or_repo_id in _MODEL_PREFIXES:
-            repo_id = HF_REPO_ID
-            fname = filename or _resolve_checkpoint_filename(
-                repo_id, _MODEL_PREFIXES[name_or_repo_id]
-            )
-        else:
-            if filename is None:
-                raise ValueError(
-                    f"Unknown model name {name_or_repo_id!r}. "
-                    f"Known names: {list(_MODEL_PREFIXES)}. "
-                    f"For a custom repo pass filename= explicitly."
-                )
-            repo_id = name_or_repo_id
-            fname = filename
-
-        local_path = hf_hub_download(repo_id=repo_id, filename=fname)
+        fname = _resolve_checkpoint_filename(hf_repo, name)
+        local_path = hf_hub_download(repo_id=hf_repo, filename=fname)
         return cls.from_checkpoint(local_path, analyzer=analyzer, device=device)
 
     @classmethod
