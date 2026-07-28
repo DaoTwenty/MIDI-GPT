@@ -663,6 +663,23 @@ class SamplingSession:
         _model_dev = _ikv[0][0].device if _ikv else torch.device("cpu")
         mask_buf = torch.empty(vocab_size, dtype=torch.bool, device=_model_dev)
 
+        # Pre-compute token-ID ranges for hard vocab blocks.
+        # When microtiming=False, Delta+DeltaDirection tokens are force-zeroed
+        # in mask_buf after the grammar mask loads — they never enter the
+        # sampling distribution regardless of model conditioning.
+        # Same for VelocityLevel when velocity=False.
+        import midigpt._core as _core
+
+        def _tok_range(tt: "_core.TokenType"):
+            s, e = self._engine._tokenizer._vocab.range(tt)
+            return (s, e) if s >= 0 and e > s else None
+
+        _block_delta = _use_microtiming == 0
+        _block_vel   = _use_velocity == 0
+        _delta_range     = _tok_range(_core.TokenType.Delta)          if _block_delta else None
+        _delta_dir_range = _tok_range(_core.TokenType.DeltaDirection) if _block_delta else None
+        _vel_range       = _tok_range(_core.TokenType.VelocityLevel)  if _block_vel   else None
+
         kv = _KVRunner(self._engine._model, self._engine._initial_kv)
         with torch.no_grad():
             while not state.complete() and self.gen_count < max_gen_tokens:
@@ -716,6 +733,17 @@ class SamplingSession:
 
                 # Reuse pre-allocated bool buffer for grammar mask
                 mask_buf.copy_(torch.as_tensor(state.logit_mask(), dtype=torch.bool))
+
+                # Hard vocab blocks: force token types to -inf regardless of
+                # grammar state (microtiming=False → no Delta/DeltaDirection,
+                # velocity=False → no VelocityLevel).
+                if _delta_range is not None:
+                    mask_buf[_delta_range[0]:_delta_range[1]] = False
+                if _delta_dir_range is not None:
+                    mask_buf[_delta_dir_range[0]:_delta_dir_range[1]] = False
+                if _vel_range is not None:
+                    mask_buf[_vel_range[0]:_vel_range[1]] = False
+
                 n_legal = int(mask_buf.sum().item())
                 if n_legal == 0:
                     if _tlogger is not None:
