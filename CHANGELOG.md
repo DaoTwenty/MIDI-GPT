@@ -11,6 +11,16 @@ section above `[Unreleased]` before tagging.
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-07-28
+
+### Changed
+- **Simplified `from_pretrained` API:** `InferenceEngine.from_pretrained(name, hf_repo=...)` now takes the exact checkpoint filename prefix (e.g. `yellow_medium`, `prism_medium`, `expressive_medium`) and an optional `hf_repo` argument (default: `Metacreation/MIDI-GPT`). The `_MODEL_PREFIXES` alias table is removed — unknown names are passed directly to the HuggingFace repo without error.
+- **`midigpt-http` CLI:** `--hf-filename` replaced by `--hf-repo` (default: `Metacreation/MIDI-GPT`). `--pretrained` now documents that it expects the exact checkpoint prefix, not a short alias. `--ckpt` help updated to reflect `.safetensors` as the primary format.
+
+### Removed
+- **Pretrained name aliases:** `"yellow"` and `"expressive"` short aliases removed. Use `yellow_medium` and `expressive_medium` directly.
+- **Ghost model documentation:** Removed ghost from the models table, `docs/models.md` overview, compatibility matrices, and code examples throughout. Ghost was never released and the planned architecture is no longer tracked here.
+
 ## [0.3.2] - 2026-07-09
 
 ### Added
