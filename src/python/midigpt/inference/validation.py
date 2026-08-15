@@ -15,7 +15,13 @@ import json
 import logging
 from dataclasses import replace
 
-from .config import GenerationRequest
+from .config import (
+    GenerationRequest,
+    resolve_rhythm_schedule,
+    validate_pitch_mask,
+    validate_remix,
+    validate_rhythm_mask,
+)
 
 log = logging.getLogger(__name__)
 
@@ -54,6 +60,13 @@ def _time_signatures(cfg_dict: dict) -> set[tuple[int, int]]:
 
 def _supports_mask_bar(cfg_dict: dict) -> bool:
     return any(d.get("type") == "MaskBar" for d in (cfg_dict.get("token_domains") or []))
+
+
+def _token_domain_size(cfg_dict: dict, type_name: str) -> int | None:
+    for d in cfg_dict.get("token_domains") or []:
+        if d.get("type") == type_name:
+            return int(d.get("domain_size", 0))
+    return None
 
 
 def _attribute_control_names(encoder_config) -> set[str]:
@@ -114,6 +127,14 @@ def validate_request(
         raise RequestValidationError(f"tracks_per_step must be > 0 (got {cfg.tracks_per_step})")
     if cfg.max_attempts < 1:
         raise RequestValidationError(f"max_attempts must be >= 1 (got {cfg.max_attempts})")
+    if cfg.num_candidates < 1:
+        raise RequestValidationError(f"num_candidates must be >= 1 (got {cfg.num_candidates})")
+    _NUM_CANDIDATES_MAX = 16
+    if cfg.num_candidates > _NUM_CANDIDATES_MAX:
+        raise RequestValidationError(
+            f"num_candidates={cfg.num_candidates} exceeds max {_NUM_CANDIDATES_MAX} "
+            "(the sequential fallback path costs one full generation per candidate)"
+        )
     if cfg.temperature <= 0:
         raise RequestValidationError(f"temperature must be > 0 (got {cfg.temperature})")
     # temperature_escalation: must be >= 1.0 (multiplier per failed attempt).
@@ -352,7 +373,8 @@ def validate_request(
     attr_levels = analyzer.attribute_levels() if analyzer is not None else {}
     # Non-attribute controls live on tp.controls. Each entry has its own
     # validator below; the names here are just the dispatch table.
-    KNOWN_CONTROLS = {"time_signature"}
+    KNOWN_CONTROLS = {"time_signature", "pitch_mask", "rhythm_mask", "remix"}
+    _pos_domain_size = _token_domain_size(cfg_dict, "TimeAbsolutePos")
     _cfg_dict = _config_dict(encoder_config)
     _ts_count = len(_cfg_dict.get("time_signatures") or [])
     _ts_list = list(_cfg_dict.get("time_signatures") or [])
@@ -666,6 +688,84 @@ def validate_request(
                 if not (0 <= int(v) < _ts_count):
                     raise RequestValidationError(
                         f"track_id={tp.id}: time_signature index {v} out of range [0, {_ts_count})"
+                    )
+            elif k == "pitch_mask":
+                if tp.ignore:
+                    raise RequestValidationError(
+                        f"track_id={tp.id}: ignored tracks must not specify pitch_mask "
+                        f"(nothing is sampled for an ignored track)"
+                    )
+                if not isinstance(v, dict):
+                    raise RequestValidationError(
+                        f"track_id={tp.id}: controls['pitch_mask'] must be a dict, got {type(v).__name__}"
+                    )
+                try:
+                    validate_pitch_mask(v)
+                except ValueError as exc:
+                    raise RequestValidationError(f"track_id={tp.id}: {exc}") from exc
+            elif k == "rhythm_mask":
+                if tp.ignore:
+                    raise RequestValidationError(
+                        f"track_id={tp.id}: ignored tracks must not specify rhythm_mask "
+                        f"(nothing is sampled for an ignored track)"
+                    )
+                if not isinstance(v, dict):
+                    raise RequestValidationError(
+                        f"track_id={tp.id}: controls['rhythm_mask'] must be a dict, got {type(v).__name__}"
+                    )
+                try:
+                    validate_rhythm_mask(v)
+                except ValueError as exc:
+                    raise RequestValidationError(f"track_id={tp.id}: {exc}") from exc
+                if _pos_domain_size is None:
+                    raise RequestValidationError(
+                        f"track_id={tp.id}: controls['rhythm_mask'] requires the "
+                        f"encoder vocab to include a TimeAbsolutePos token domain"
+                    )
+                if "positions" in v:
+                    schedule = resolve_rhythm_schedule(v)
+                    oor = [pos for pos, _poly in schedule if pos >= _pos_domain_size]
+                    if oor:
+                        raise RequestValidationError(
+                            f"track_id={tp.id}: rhythm_mask.positions {oor} out of range "
+                            f"[0, {_pos_domain_size}) for this checkpoint"
+                        )
+                    if cfg.tracks_per_step != 1:
+                        raise RequestValidationError(
+                            f"track_id={tp.id}: rhythm_mask.positions (hard exact rhythm) "
+                            f"requires config.tracks_per_step=1 (got {cfg.tracks_per_step}) — "
+                            f"forcing an exact per-track token schedule isn't safe when "
+                            f"another track's tokens may interleave in the same step"
+                        )
+            elif k == "remix":
+                if tp.ignore:
+                    raise RequestValidationError(
+                        f"track_id={tp.id}: ignored tracks must not specify remix "
+                        f"(nothing is sampled for an ignored track)"
+                    )
+                if not isinstance(v, dict):
+                    raise RequestValidationError(
+                        f"track_id={tp.id}: controls['remix'] must be a dict, got {type(v).__name__}"
+                    )
+                try:
+                    validate_remix(v)
+                except ValueError as exc:
+                    raise RequestValidationError(f"track_id={tp.id}: {exc}") from exc
+                if "rhythm_mask" in controls:
+                    raise RequestValidationError(
+                        f"track_id={tp.id}: 'remix' and 'rhythm_mask' are mutually exclusive "
+                        f"on the same track — remix derives its own onset schedule from the "
+                        f"reference content already on the score"
+                    )
+                if _pos_domain_size is None:
+                    raise RequestValidationError(
+                        f"track_id={tp.id}: controls['remix'] requires the encoder vocab to "
+                        f"include a TimeAbsolutePos token domain"
+                    )
+                if cfg.tracks_per_step != 1:
+                    raise RequestValidationError(
+                        f"track_id={tp.id}: controls['remix'] requires config.tracks_per_step=1 "
+                        f"(got {cfg.tracks_per_step}) — same reasoning as rhythm_mask.positions"
                     )
 
     if not has_anything_to_generate:

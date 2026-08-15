@@ -2,6 +2,7 @@ import copy
 import json
 import logging
 import math
+import random
 import time  # Moved from _sample_step
 from dataclasses import replace as replace_cfg
 from pathlib import Path
@@ -12,7 +13,14 @@ import midigpt._core as _core
 from midigpt._converters import from_cpp, to_cpp
 from midigpt._core import GenerationStep  # Import GenerationStep directly from _core
 from midigpt._types import Score
-from midigpt.inference.config import GenerationRequest, InferenceConfig
+from midigpt.inference.config import (
+    GenerationRequest,
+    InferenceConfig,
+    pitch_shape_weight,
+    resolve_pitch_allow_set,
+    resolve_rhythm_schedule,
+    rhythm_grid_weight,
+)
 
 log = logging.getLogger(__name__)
 
@@ -231,6 +239,37 @@ class _ContextOverflow(Exception):
         self.model_max = model_max
 
 
+class _BatchNotEligible(Exception):
+    """Raised internally when cfg.batch_attempts can't be honored for this
+    step (currently: any hidden span present — batched span-masking isn't
+    implemented). Caught by _run_step, which falls back to the sequential
+    per-attempt path."""
+
+
+class GenerationCancelled(Exception):
+    """Raised when SamplingSession.cancel_event is observed set mid-decode.
+
+    Deliberately NOT a RuntimeError — _run_step's retry loop only catches
+    RuntimeError (for rejectable "constraint graph error" attempts), so this
+    propagates straight through every retry/candidate loop uncaught and out
+    of run()/run_variations() to the caller. Retrying after a deliberate
+    cancel would be wasted work and would delay honoring the cancellation.
+
+    Carries whatever was generated before the cancellation, decoded through
+    the exact same path a natural completion would use, so callers get a
+    usable partial result instead of nothing:
+      - from _sample_step: `partial` is a single Score.
+      - from _sample_step_batch: `partial` is the same list of
+        (Score|None, gen_count, error, truncated) tuples _sample_step_batch
+        normally returns, one per row.
+    """
+
+    def __init__(self, partial, gen_count: int):
+        super().__init__("generation cancelled")
+        self.partial = partial
+        self.gen_count = gen_count
+
+
 class _KVRunner:
     """Owns the KV cache across a single sampling step.
 
@@ -292,16 +331,264 @@ class _KVRunner:
         self._model.kv_null_positions(self._past_kv, spans)
 
 
+class _RhythmForcer:
+    """Per-row state machine enforcing controls["rhythm_mask"]["positions"]
+    (hard exact rhythm + per-position polyphony) on one track's generated
+    bars. One instance per generated row (sequential: one; batched: one per
+    row — see _sample_step_batch) so a row that dies early never corrupts
+    another row's progress.
+
+    Bar grammar observed empirically on real checkpoints (yellow_medium):
+    every bar opens with an implicit note at tick 0 — no token for leading
+    silence — then alternates between "more notes at this tick" (another
+    [VelocityLevel] NoteOnset NoteDuration group, no TimeAbsolutePos in
+    between — a chord) and "move to a new tick" (a TimeAbsolutePos token),
+    until BarEnd. This class narrows mask_buf to walk that exact alternation
+    against a fixed schedule: `apply()` restricts the CURRENT step's legal
+    tokens, `advance()` updates progress once the actual token is known.
+
+    VelocityLevel is legal in BOTH situations — it can restate the velocity
+    for the next chord note OR for the first note after a position move —
+    and always commits the grammar to a NoteOnset immediately next (never
+    observed followed by anything else). So once a group's target polyphony
+    is met, VelocityLevel must be blocked alongside NoteOnset — leaving it
+    open would let the model "escape" the forced transition by restating
+    velocity, which the grammar then obligates to another onset that's
+    already been blocked, deadlocking (n_legal==0).
+
+    Deliberately narrows only — never widens a bit the grammar mask (or any
+    other active hard constraint, e.g. density_hard_limit) already turned
+    off. A schedule that's incompatible with another hard constraint (e.g.
+    requires fewer simultaneous notes than a note_density floor) hits the
+    existing n_legal==0 safety net instead of corrupting state — but since
+    this forcing is deterministic (not seed-dependent), such a conflict
+    fails identically on every retry attempt.
+    """
+
+    def __init__(self, schedule: list[tuple[int, int]], pos_range: tuple[int, int],
+                 onset_range: tuple[int, int], vel_range: tuple[int, int] | None, barend_id: int):
+        self.schedule = schedule  # [(tick, polyphony), ...], sorted, schedule[0][0] == 0
+        self.pos_lo, self.pos_hi = pos_range
+        self.onset_lo, self.onset_hi = onset_range
+        self.vel_range = vel_range  # None if this checkpoint has no VelocityLevel domain
+        self.barend_id = barend_id
+        self.group_idx = 0
+        self.notes_in_group = 0
+
+    def reset(self):
+        self.group_idx = 0
+        self.notes_in_group = 0
+
+    def apply(self, mask_buf):
+        if self.group_idx >= len(self.schedule):
+            # Schedule exhausted for this bar — no more notes, no more moves.
+            mask_buf[self.onset_lo:self.onset_hi] = False
+            mask_buf[self.pos_lo:self.pos_hi] = False
+            if self.vel_range is not None:
+                mask_buf[self.vel_range[0]:self.vel_range[1]] = False
+            return
+        required = self.schedule[self.group_idx][1]
+        if self.notes_in_group < required:
+            # Still filling this onset point — force another NoteOnset
+            # (optionally preceded by a VelocityLevel restate, left alone).
+            mask_buf[self.pos_lo:self.pos_hi] = False
+            mask_buf[self.barend_id] = False
+            return
+        # This onset point is full — force a move, never another chord note.
+        mask_buf[self.onset_lo:self.onset_hi] = False
+        if self.vel_range is not None:
+            mask_buf[self.vel_range[0]:self.vel_range[1]] = False
+        if self.group_idx + 1 < len(self.schedule):
+            target_tick = self.schedule[self.group_idx + 1][0]
+            target_id = self.pos_lo + target_tick
+            # Never force a token the grammar itself hasn't already legalized
+            # here — narrow to it only if it's already True.
+            still_legal = bool(mask_buf[target_id])
+            mask_buf[self.pos_lo:self.pos_hi] = False
+            mask_buf[self.barend_id] = False
+            if still_legal:
+                mask_buf[target_id] = True
+        else:
+            # Last scheduled onset point — only BarEnd should remain.
+            mask_buf[self.pos_lo:self.pos_hi] = False
+
+    def advance(self, tname: str):
+        # Reset on BarEnd, not Bar: BarEnd unambiguously marks "this bar's
+        # schedule is fully consumed, the next token starts a new bar."
+        # Bar itself doesn't work as a trigger — the very first Bar token
+        # (opening bar_idx=0, which is already where __init__ starts) would
+        # incorrectly fire a reset too, and if a bar's opening is inherited
+        # from context rather than sampled, its Bar token never appears in
+        # this loop at all.
+        if tname == "BarEnd":
+            self.reset()
+        elif tname == "NoteDuration":
+            self.notes_in_group += 1
+        elif tname == "TimeAbsolutePos":
+            self.group_idx += 1
+            self.notes_in_group = 0
+
+
+class _VariationForcer:
+    """Per-row state machine enforcing controls["remix"] — regenerates a
+    track's bars as a partial variation of reference content already
+    present in the input score (before this call), instead of generating
+    fresh. One instance per generated row (see _RhythmForcer for why).
+
+    The onset SCHEDULE (ticks + polyphony per bar) is always forced from
+    the reference, exactly like a _RhythmForcer built from that same
+    reference — see that class's docstring for the underlying grammar and
+    the narrow-only/never-widen safety philosophy, both fully reused here.
+    On top of the schedule, each reference note's pitch (and, in "full"
+    mode, duration) is independently rolled once per note: kept forced to
+    the reference value, or left open for the model to resample freely
+    (subject to whatever other masks — e.g. controls["pitch_mask"] — are
+    also active). Velocity is always left to free sampling in both modes:
+    this checkpoint exposes no raw-velocity -> VelocityLevel-token
+    quantizer, so there's no reliable way to compute the token id a
+    reference velocity would encode to.
+    """
+
+    def __init__(self, mode: str, amount: float, bars_schedule: list,
+                 pos_range: tuple[int, int], onset_range: tuple[int, int],
+                 dur_range: tuple[int, int] | None, vel_range: tuple[int, int] | None,
+                 barend_id: int):
+        self.mode = mode
+        self.amount = amount
+        # bars_schedule: one entry per generated bar (generation order), each
+        # a list of (tick, [(pitch, duration_ticks), ...]) groups sorted by
+        # tick; chord notes within a group sorted by pitch (deterministic —
+        # forcing order within a chord doesn't matter, each slot just needs
+        # a stable reference value to compare against).
+        self.bars_schedule = bars_schedule
+        self.pos_lo, self.pos_hi = pos_range
+        self.onset_lo, self.onset_hi = onset_range
+        self.dur_range = dur_range
+        self.vel_range = vel_range
+        self.barend_id = barend_id
+        self.bar_idx = 0
+        self.group_idx = 0
+        self.note_idx = 0
+        self._roll_note()
+
+    def _current_bar(self):
+        return self.bars_schedule[self.bar_idx] if self.bar_idx < len(self.bars_schedule) else []
+
+    def _current_group(self):
+        bar = self._current_bar()
+        return bar[self.group_idx] if self.group_idx < len(bar) else None
+
+    def _roll_note(self):
+        # True = force the reference value; False = leave open for resampling.
+        keep = random.random() >= self.amount
+        self._force_pitch = keep
+        self._force_duration = True if self.mode == "pitch" else keep
+
+    def _narrow(self, mask_buf, rng, value):
+        if rng is None:
+            return
+        lo, hi = rng
+        target = lo + value
+        if lo <= target < hi and bool(mask_buf[target]):
+            mask_buf[lo:hi] = False
+            mask_buf[target] = True
+        # else: reference value out of this checkpoint's domain, or not
+        # currently grammar-legal (context differs from when the reference
+        # was made) — leave the sub-range as already narrowed and fall back
+        # to free sampling for this attribute rather than forcing a token
+        # that isn't actually legal here.
+
+    def reset_bar(self):
+        self.bar_idx += 1
+        self.group_idx = 0
+        self.note_idx = 0
+        self._roll_note()
+
+    def apply(self, mask_buf):
+        group = self._current_group()
+        if group is None:
+            # Reference bar's schedule exhausted — no more notes, no more moves.
+            mask_buf[self.onset_lo:self.onset_hi] = False
+            mask_buf[self.pos_lo:self.pos_hi] = False
+            if self.vel_range is not None:
+                mask_buf[self.vel_range[0]:self.vel_range[1]] = False
+            return
+        tick, notes = group
+        if self.note_idx < len(notes):
+            # Still filling this onset point — force another NoteOnset.
+            mask_buf[self.pos_lo:self.pos_hi] = False
+            mask_buf[self.barend_id] = False
+            pitch, duration = notes[self.note_idx]
+            if self._force_pitch:
+                self._narrow(mask_buf, (self.onset_lo, self.onset_hi), pitch)
+            if self._force_duration:
+                self._narrow(mask_buf, self.dur_range, duration)
+            return
+        # Onset point full — force a move, never another chord note (same
+        # VelocityLevel-blocking rationale as _RhythmForcer: leaving it open
+        # lets the model "escape" via a velocity restate that then commits
+        # to another onset we've already blocked, deadlocking).
+        mask_buf[self.onset_lo:self.onset_hi] = False
+        if self.vel_range is not None:
+            mask_buf[self.vel_range[0]:self.vel_range[1]] = False
+        bar = self._current_bar()
+        if self.group_idx + 1 < len(bar):
+            target_tick = bar[self.group_idx + 1][0]
+            target_id = self.pos_lo + target_tick
+            still_legal = bool(mask_buf[target_id]) if 0 <= target_tick < (self.pos_hi - self.pos_lo) else False
+            mask_buf[self.pos_lo:self.pos_hi] = False
+            mask_buf[self.barend_id] = False
+            if still_legal:
+                mask_buf[target_id] = True
+        else:
+            mask_buf[self.pos_lo:self.pos_hi] = False
+
+    def advance(self, tname: str):
+        # See the matching comment on _RhythmForcer.advance — reset on
+        # BarEnd, not Bar, for the same off-by-one/context-inherited-bar
+        # reasons, which matter MORE here since each bar has a distinct
+        # reference (a fixed shared schedule like _RhythmForcer's would mask
+        # the bug; per-bar reference values expose it immediately).
+        if tname == "BarEnd":
+            self.reset_bar()
+        elif tname == "NoteDuration":
+            self.note_idx += 1
+            self._roll_note()
+        elif tname == "TimeAbsolutePos":
+            self.group_idx += 1
+            self.note_idx = 0
+
+
 class SamplingSession:
     def __init__(self, engine, score: Score, request: GenerationRequest):
         self._engine = engine
         self._score = score
         self._request = request
+        # cfg.seed < 0 means "caller doesn't care about reproducibility" —
+        # resolve that to an actual random seed ONCE per session (not
+        # per-attempt/per-candidate) so it stays consistent across every
+        # attempt/candidate/step in this run, and so the caller can be told
+        # what seed was used and replay this exact generation later. Exposed
+        # via http/server.py's response ("seed" / "base_seed" field).
+        _cfg_seed = getattr(request.config, "seed", -1)
+        self.resolved_seed: int = _cfg_seed if _cfg_seed is not None and _cfg_seed >= 0 else random.randint(0, 2**31 - 1)
         self.model_forward_time: float = 0.0
         self.encode_time: float = 0.0
         self.decode_time: float = 0.0
         self.enable_profiling: bool = False
         self.gen_count: int = 0
+        # Token-budget bookkeeping, set in _sample_step/_sample_step_batch —
+        # exposed via http/server.py's "tokens" response block so callers can
+        # see how close a request came to the model's context window.
+        self.context_len: int = 0
+        self.max_context_len: int = 0
+        # True if generation stopped because gen_count hit max_gen_tokens
+        # (context budget exhausted) rather than the grammar/model reaching
+        # a natural stopping point (state.complete()) — e.g. all requested
+        # bars filled. Exposed via http/server.py's "tokens" response block
+        # ("truncated") so callers can tell "this is genuinely done" from
+        # "this got cut off, there may have been more".
+        self.truncated: bool = False
         # Optional callback fired once per run() with a per-bar snapshot of
         # the first step's prompt state (CONTEXT/MASKED/TO_GENERATE per
         # (track, bar)). Used for client-side comparison/debug; pure read-only.
@@ -310,6 +597,27 @@ class SamplingSession:
         # Optional TokenLogger — attach before calling run() to get full token
         # and context diagnostics written to a JSONL file.
         self.token_logger: "TokenLogger | None" = None
+        # Optional threading.Event — attach before calling run()/
+        # run_variations() to allow mid-decode cancellation. Polled once per
+        # token inside _sample_step/_sample_step_batch's decode loop; when
+        # set, the loop stops early and GenerationCancelled is raised with
+        # whatever was generated so far (see that class's docstring). A
+        # threading.Event (not asyncio.Event) because the decode loop runs
+        # in a worker thread (http/server.py's run_in_executor), not the
+        # event loop.
+        self.cancel_event: "threading.Event | None" = None
+        # Optional callback — attach before calling run() to receive newly-
+        # completed notes as they're generated: called with a list of dicts
+        # {"track": int, "bar": int, "pitch": int, "onset_ticks": int,
+        # "duration_ticks": int, "velocity": int}, each time NEW notes appear
+        # in the decoded partial score compared to the last check. Fires
+        # once per completed note (right after its NoteDuration token) in
+        # _sample_step only — NOT _sample_step_batch, i.e. not for
+        # num_candidates>1 or batch_attempts: streaming N interleaved
+        # candidate note-streams over one connection needs each event
+        # tagged by candidate index, which is a bigger design question than
+        # this first pass covers.
+        self.note_sink: "Callable[[list[dict]], None] | None" = None
 
     def __enter__(self):
         return self
@@ -351,9 +659,21 @@ class SamplingSession:
             score = to_cpp(copy.deepcopy(py_score))
             try:
                 self._snapshot_sent = False
+                n_steps = 0
                 for step in tqdm(planner.plan()):
                     score = self._run_step(score, step, cfg_try)
-                return score
+                    n_steps += 1
+                if n_steps == 0:
+                    log.warning(
+                        "planner produced zero steps at model_dim=%d — nothing was "
+                        "generated; returning the input score unchanged",
+                        d,
+                    )
+                # _run_step always hands back a wrapped Score; if no step ran,
+                # `score` is still the raw _core.Score from to_cpp() above —
+                # normalize either way so callers always get a real Score
+                # (with .to_dict()) instead of the native pybind object.
+                return score if isinstance(score, Score) else from_cpp(score)
             except _ContextOverflow as exc:
                 last_exc = exc
                 log.warning(
@@ -364,6 +684,159 @@ class SamplingSession:
                 )
                 continue
         raise RuntimeError(f"no model_dim in {candidates} fits the model (last: {last_exc})")
+
+    def run_variations(self) -> list:
+        """cfg.num_candidates independent full generations from the SAME
+        prompt — one seed per candidate, NO accept/reject filtering (unlike
+        the max_attempts retry loop). Meant for "give me a few takes, I'll
+        pick one" workflows: e.g. 4 existing tracks, generating a 5th, and
+        wanting several differently-seeded options to choose from instead of
+        committing to whatever the first generation produces.
+
+        Returns a list of cfg.num_candidates dicts, each
+        {"score": Score | None, "seed": int, "gen_count": int, "error": str | None},
+        in seed order (index 0 = base seed, index 1 = base seed + 1, ...).
+
+        Fast path: if the request resolves to a single planner step and
+        needs no hidden spans (no explicit mask_bars), all N candidates run
+        as ONE batched decode (one forward pass per token step across all N
+        rows) via _sample_step_batch. Otherwise (multi-step plan, or a
+        request that needs span masking) falls back to N sequential
+        single-candidate run() calls, each with its own seed — slower, but
+        correct for every request shape.
+        """
+        cfg = self._request.config
+        N = cfg.num_candidates
+        base_seed = self.resolved_seed
+        seeds = [base_seed + i for i in range(N)]
+
+        mask = self._build_selection_mask()
+        enc_cfg = self._engine._tokenizer._vocab.config()
+        import json as _json
+
+        try:
+            dims = sorted(
+                set(_json.loads(enc_cfg.to_json()).get("num_bars_map") or []),
+                reverse=True,
+            )
+        except Exception:
+            dims = []
+        candidates_dims = [d for d in dims if d <= cfg.model_dim] or [cfg.model_dim]
+        d = candidates_dims[0]
+        cfg_try = replace_cfg(cfg, model_dim=d) if d != cfg.model_dim else cfg
+        enc_cfg.model_dim = d
+        planner = _core.StepPlanner(mask, enc_cfg, cfg_try.bars_per_step, cfg_try.tracks_per_step)
+        py_score = self._score if isinstance(self._score, Score) else from_cpp(self._score)
+        steps = list(planner.plan())
+
+        if len(steps) == 1:
+            self.gen_count = 0
+            self.model_forward_time = 0.0
+            self.encode_time = 0.0
+            self.decode_time = 0.0
+            self._snapshot_sent = False
+            try:
+                # _sample_step_batch expects a Python Score — it does its own
+                # per-row copy.deepcopy() + to_cpp(), unlike run()'s single-row
+                # path which converts to native once upfront.
+                raw = self._sample_step_batch(
+                    copy.deepcopy(py_score), steps[0], [cfg_try.temperature] * N, seeds
+                )
+                return [
+                    {
+                        "score": s, "seed": seeds[i], "gen_count": gc,
+                        "error": err, "truncated": trunc,
+                    }
+                    for i, (s, gc, err, trunc) in enumerate(raw)
+                ]
+            except _BatchNotEligible as exc:
+                log.info(
+                    "run_variations: batched path not eligible (%s); falling back "
+                    "to %d sequential run() calls",
+                    exc, N,
+                )
+            except GenerationCancelled as exc:
+                # exc.partial is _sample_step_batch's own raw tuple list —
+                # reshape into the same dict shape a successful return
+                # would have, same as the non-cancelled branch above.
+                raise GenerationCancelled(
+                    [
+                        {
+                            "score": s, "seed": seeds[i], "gen_count": gc,
+                            "error": err, "truncated": trunc,
+                        }
+                        for i, (s, gc, err, trunc) in enumerate(exc.partial)
+                    ],
+                    exc.gen_count,
+                ) from None
+
+        # Fallback: N independent sequential single-candidate generations.
+        # Slower (no batched forward pass), but correct for multi-step plans
+        # and span-masked requests, which the batched path doesn't cover.
+        original_request = self._request
+        original_resolved_seed = self.resolved_seed
+        out = []
+        # self.run() resets gen_count/model_forward_time/etc. to 0 at its own
+        # top, so each candidate's values would clobber the previous one's —
+        # accumulate here so the session-level totals (read by
+        # http/server.py's aggregate "tokens"/"timing" blocks) cover ALL N
+        # candidates, not just whichever ran last.
+        total_gen_count = 0
+        total_forward = total_encode = total_decode = 0.0
+        any_truncated = False
+        cancelled = False
+        try:
+            for i in range(N):
+                self._request = replace_cfg(
+                    original_request,
+                    config=replace_cfg(original_request.config, seed=seeds[i], num_candidates=1),
+                )
+                # _run_step reads self.resolved_seed, not cfg.seed directly —
+                # keep them in sync or every candidate would silently reuse
+                # the ORIGINAL (pre-fallback) resolved seed instead of seeds[i].
+                self.resolved_seed = seeds[i]
+                self._snapshot_sent = False
+                try:
+                    result = self.run()
+                    out.append({
+                        "score": result, "seed": seeds[i], "gen_count": self.gen_count,
+                        "error": None, "truncated": self.truncated,
+                    })
+                    any_truncated = any_truncated or self.truncated
+                except GenerationCancelled as exc:
+                    # Cancellation stops the WHOLE batch here, not just this
+                    # candidate — retrying/continuing after a deliberate
+                    # cancel would be wasted work and would delay honoring
+                    # it. Remaining (not-yet-started) candidates are simply
+                    # absent from `out`, same as "never got to them".
+                    out.append({
+                        "score": exc.partial, "seed": seeds[i], "gen_count": exc.gen_count,
+                        "error": None, "truncated": True,
+                    })
+                    total_gen_count += exc.gen_count
+                    cancelled = True
+                    break
+                except Exception as exc:
+                    out.append({
+                        "score": None, "seed": seeds[i], "gen_count": 0,
+                        "error": str(exc), "truncated": False,
+                    })
+                total_gen_count += self.gen_count
+                total_forward += self.model_forward_time
+                total_encode += self.encode_time
+                total_decode += self.decode_time
+        finally:
+            self._request = original_request
+            self.resolved_seed = original_resolved_seed
+            self.gen_count = total_gen_count
+            self.model_forward_time = total_forward
+            self.encode_time = total_encode
+            self.decode_time = total_decode
+            self.truncated = any_truncated or cancelled
+
+        if cancelled:
+            raise GenerationCancelled(out, total_gen_count)
+        return out
 
     def _run_step(
         self, score: Score, step: GenerationStep, cfg: InferenceConfig | None = None
@@ -378,16 +851,108 @@ class SamplingSession:
         original_score = score  # baseline for novelty comparison
 
         errors = []
-        base_seed = getattr(cfg, "seed", -1)
+        base_seed = self.resolved_seed
         last_candidate = None
+        import torch
+        _device_is_mps = next(self._engine._model.parameters()).device.type == "mps"
+
+        if getattr(cfg, "batch_attempts", False) and cfg.max_attempts > 1:
+            temperatures = [
+                cfg.temperature * (cfg.temperature_escalation**i) for i in range(cfg.max_attempts)
+            ]
+            seeds = [
+                (base_seed + i) if base_seed is not None and base_seed >= 0 else -1
+                for i in range(cfg.max_attempts)
+            ]
+            try:
+                batch_results = self._sample_step_batch(score, step, temperatures, seeds)
+            except _BatchNotEligible as exc:
+                log.info(
+                    "batch_attempts requested but not eligible (%s); falling back to sequential",
+                    exc,
+                )
+            else:
+                for i, (candidate, gen_count, err, _truncated) in enumerate(batch_results):
+                    if err is not None:
+                        errors.append(f"sampling crash ({err})")
+                        log.warning(
+                            "attempt %d/%d crashed (%s) [batched, gen_count=%d]",
+                            i + 1, cfg.max_attempts, err, gen_count,
+                        )
+                        continue
+                    last_candidate = candidate
+                    silence_failed = self._note_count(candidate, step) <= 0
+                    novelty_failed = self._is_identical(original_score, candidate)
+                    attempt_errors = []
+                    attempt_warnings = []
+                    if silence_failed:
+                        msg = "silence_check (no notes generated in target bars)"
+                        (attempt_errors if cfg.silence_check else attempt_warnings).append(msg)
+                    if novelty_failed:
+                        msg = "novelty_check (candidate identical to original)"
+                        (attempt_errors if cfg.novelty_check else attempt_warnings).append(msg)
+                    for w in attempt_warnings:
+                        log.warning(
+                            "attempt %d/%d accepted with warning: %s (check disabled) [batched]",
+                            i + 1, cfg.max_attempts, w,
+                        )
+                    if not attempt_errors:
+                        log.info(
+                            "attempt %d/%d accepted [batched, gen_count=%d]",
+                            i + 1, cfg.max_attempts, gen_count,
+                        )
+                        return candidate
+                    errors.extend(attempt_errors)
+                    log.info(
+                        "attempt %d/%d rejected (%s) [batched, gen_count=%d]",
+                        i + 1, cfg.max_attempts, "; ".join(attempt_errors), gen_count,
+                    )
+
+                from collections import Counter
+                reason_summary = ", ".join(f"{r}×{c}" for r, c in Counter(errors).most_common())
+                raise RuntimeError(
+                    f"Max attempts ({cfg.max_attempts}) reached, no acceptable candidate "
+                    f"found. Rejection reasons: {reason_summary}. "
+                    f"Last candidate had "
+                    f"{self._note_count(last_candidate, step) if last_candidate is not None else 0} "
+                    f"notes in "
+                    f"generated bars. "
+                    f"(Hints: vary retries with temperature_escalation > 1, raise "
+                    f"max_attempts, disable the failing check, or relax top_p/mask_p "
+                    f"for broader sampling.)"
+                )
+
         for i in range(cfg.max_attempts):
             temperature = cfg.temperature * (cfg.temperature_escalation**i)
             # Bump the seed per retry when the user pinned one — otherwise all
             # attempts would resample the same tokens deterministically and
             # max_attempts would be a no-op. seed<0 keeps the RNG free-running.
             attempt_seed = (base_seed + i) if base_seed is not None and base_seed >= 0 else -1
-            candidate = self._sample_step(score, step, temperature, attempt_seed)
+            try:
+                candidate = self._sample_step(score, step, temperature, attempt_seed)
+            except RuntimeError as exc:
+                if "constraint graph error" not in str(exc):
+                    raise
+                # Grammar deadlock is just another rejectable attempt outcome —
+                # a different seed/temperature can land on a different token
+                # path that doesn't hit it. Let the retry loop below handle it
+                # like any other rejected candidate instead of crashing the
+                # whole request on attempt 1.
+                errors.append(f"sampling crash ({exc})")
+                log.warning(
+                    "attempt %d/%d crashed (%s); retrying with temp=%.2f, seed=%s",
+                    i + 1,
+                    cfg.max_attempts,
+                    exc,
+                    temperature * cfg.temperature_escalation,
+                    attempt_seed,
+                )
+                if _device_is_mps:
+                    torch.mps.empty_cache()
+                continue
             last_candidate = candidate
+            if _device_is_mps:
+                torch.mps.empty_cache()
 
             # Always evaluate BOTH checks. Whether a failure is an error or just
             # a warning depends on whether the corresponding check is enabled.
@@ -414,12 +979,14 @@ class SamplingSession:
 
             errors.extend(attempt_errors)
             log.info(
-                "attempt %d/%d rejected (%s); retrying with temp=%.2f, seed=%s",
+                "attempt %d/%d rejected (%s); retrying with temp=%.2f, seed=%s, "
+                "gen_count_so_far=%d",
                 i + 1,
                 cfg.max_attempts,
                 "; ".join(attempt_errors),
                 temperature * cfg.temperature_escalation,
                 attempt_seed,
+                self.gen_count,
             )
 
         from collections import Counter
@@ -434,6 +1001,185 @@ class SamplingSession:
             f"max_attempts, disable the failing check, or relax top_p/mask_p "
             f"for broader sampling.)"
         )
+
+    def _resolve_step_control(self, step, key: str):
+        """Resolve a per-track `controls[key]` dict for whichever track(s)
+        are active in this step. Steps normally involve exactly one track
+        (tracks_per_step=1, the default); if a joint multi-track step has
+        tracks with differing values for `key` — INCLUDING one track setting
+        it and another leaving it unset — the control is skipped for this
+        step (logged) rather than guessed at. There's no per-token track
+        attribution available at the point tokens get masked (the sampled
+        tokens for every track active in a joint step share one interleaved
+        stream), so applying one track's setting to another's tokens would
+        be silently wrong rather than merely conservative.
+        """
+        step_tracks = {t for (t, _b) in step.bars_to_generate}
+        values = [tp.controls.get(key) for tp in self._request.tracks if tp.id in step_tracks]
+        if not values or all(v is None for v in values):
+            return None
+        first = values[0]
+        if all(v == first for v in values[1:]):
+            return first
+        log.warning(
+            "controls[%r] differs across tracks %s active in this step; "
+            "skipping for this step",
+            key, sorted(step_tracks),
+        )
+        return None
+
+    def _build_pitch_mask(self, step):
+        """Hard allow-set + soft shape weights for TokenType.NoteOnset,
+        derived from whichever track's `controls["pitch_mask"]` applies to
+        this step (see _resolve_step_control). Works identically for AR and
+        infill steps — it hooks the same post-grammar-mask point already
+        used for the delta/velocity hard blocks, before any AR-vs-infill
+        branching has happened.
+
+        Returns ((range_start, range_end), allow_bool[domain] | None,
+        shape_weights[domain] | None), or (None, None, None) if this
+        checkpoint has no NoteOnset domain or no track in this step
+        configures pitch_mask.
+        """
+        import torch
+
+        pitch_mask = self._resolve_step_control(step, "pitch_mask")
+        if not pitch_mask:
+            return None, None, None
+        vocab = self._engine._tokenizer._vocab
+        s, e = vocab.range(_core.TokenType.NoteOnset)
+        if s < 0 or e <= s:
+            return None, None, None
+        domain = e - s
+
+        allow_set = resolve_pitch_allow_set(pitch_mask)
+        allow_bool = None
+        if allow_set is not None:
+            allow_bool = torch.zeros(domain, dtype=torch.bool)
+            for p in allow_set:
+                if 0 <= p < domain:
+                    allow_bool[p] = True
+
+        shape = pitch_mask.get("shape")
+        shape_weights = None
+        if shape:
+            shape_weights = torch.tensor(
+                [pitch_shape_weight(shape, p) for p in range(domain)], dtype=torch.float32
+            )
+
+        return (s, e), allow_bool, shape_weights
+
+    def _build_rhythm_mask(self, step):
+        """Resolves controls["rhythm_mask"] for whichever track applies to
+        this step (see _resolve_step_control — same single-track-or-agree
+        rule as pitch_mask). Works identically for AR and infill steps for
+        the same reason _build_pitch_mask does: it hooks the shared
+        post-grammar-mask point, before any AR-vs-infill branching.
+
+        Returns (pos_range, schedule | None, grid_weights[domain] | None):
+        `schedule` is set for hard "positions" mode (consumed by a fresh
+        _RhythmForcer per row); `grid_weights` is set for soft "grid" mode
+        (multiplied into probs like the pitch shape weights). At most one of
+        the two is non-None — validation.py enforces they're mutually
+        exclusive. (None, None, None) if this checkpoint has no
+        TimeAbsolutePos domain or no track in this step configures it.
+        """
+        import torch
+
+        rhythm_mask = self._resolve_step_control(step, "rhythm_mask")
+        if not rhythm_mask:
+            return None, None, None
+        vocab = self._engine._tokenizer._vocab
+        s, e = vocab.range(_core.TokenType.TimeAbsolutePos)
+        if s < 0 or e <= s:
+            return None, None, None
+        domain = e - s
+
+        if "positions" in rhythm_mask:
+            schedule = resolve_rhythm_schedule(rhythm_mask)
+            return (s, e), schedule, None
+
+        grid = rhythm_mask["grid"]
+        resolution = int(vocab.config().resolution)
+        grid_weights = torch.tensor(
+            [rhythm_grid_weight(grid, resolution, t) for t in range(domain)], dtype=torch.float32
+        )
+        return (s, e), None, grid_weights
+
+    def _build_remix_schedule(self, score, step):
+        """Resolves controls["remix"] for whichever track applies to this
+        step (see _resolve_step_control). Reference note data is read
+        directly from `score` — the bars being varied are still generation
+        targets from the model's point of view (masked out of its visible
+        context as usual, same as any infill/AR target), but their note
+        data is present in the Python object regardless of what the model
+        can see, since it's `score` before to_cpp()/SessionState masking.
+
+        Returns (mode, amount, bars_schedule) or (None, None, None).
+        `bars_schedule` is one entry per bar in this step's generation
+        order, each a list of (tick, [(pitch, duration_ticks), ...]) groups
+        sorted by tick (chord notes sorted by pitch — an arbitrary but
+        stable order, since forcing only compares values, not positions
+        within a chord).
+        """
+        remix = self._resolve_step_control(step, "remix")
+        if not remix:
+            return None, None, None
+        track_ids = {t for (t, _b) in step.bars_to_generate}
+        if len(track_ids) != 1:
+            return None, None, None
+        tid = next(iter(track_ids))
+        bar_ids = sorted(b for (t, b) in step.bars_to_generate if t == tid)
+        bars_schedule = []
+        for b in bar_ids:
+            notes = score.tracks[tid].bars[b].notes
+            groups: dict[int, list[tuple[int, int]]] = {}
+            for n in notes:
+                # NoteDuration's token VALUE is (duration_ticks - 1), not the
+                # raw tick count (confirmed against this checkpoint's vocab —
+                # e.g. a 240-tick note encodes as NoteDuration value 239).
+                groups.setdefault(int(n.onset_ticks), []).append(
+                    (int(n.pitch), max(0, int(n.duration_ticks) - 1))
+                )
+            ordered = [(tick, sorted(groups[tick], key=lambda t: t[0])) for tick in sorted(groups)]
+            bars_schedule.append(ordered)
+        mode = remix.get("mode", "pitch")
+        amount = float(remix.get("amount", 0.0))
+        return mode, amount, bars_schedule
+
+    @staticmethod
+    def _diff_notes(prev, curr) -> list[dict]:
+        """Notes present in `curr` but not in `prev`, per (track, bar).
+        Assumes decode order is append-only as generation progresses within
+        a bar — true in practice, since each call re-decodes the same
+        growing context — so any length increase in a (track, bar)'s note
+        list means the newly-appended tail is what's new. `prev` may have
+        fewer tracks/bars than `curr` if the score is still being built up;
+        treated as "0 prior notes" in that case, not an error.
+        """
+        if prev is None:
+            return []
+        new_notes = []
+        for t_idx, track in enumerate(curr.tracks):
+            prev_track = prev.tracks[t_idx] if t_idx < len(prev.tracks) else None
+            for b_idx, bar in enumerate(track.bars):
+                prev_bar = (
+                    prev_track.bars[b_idx]
+                    if prev_track is not None and b_idx < len(prev_track.bars)
+                    else None
+                )
+                prev_count = len(prev_bar.notes) if prev_bar is not None else 0
+                if len(bar.notes) > prev_count:
+                    for n in bar.notes[prev_count:]:
+                        new_notes.append({
+                            "track": t_idx,
+                            "bar": b_idx,
+                            "pitch": n.pitch,
+                            "onset_ticks": n.onset_ticks,
+                            "duration_ticks": n.duration_ticks,
+                            "velocity": n.velocity,
+                        })
+        return new_notes
 
     def _sample_step(self, score: Score, step, temperature: float, seed: int = -1) -> Score:
         try:
@@ -523,8 +1269,22 @@ class SamplingSession:
         new_ctx = [list(row) for row in step.context]
         ctx_dirty = False
         req_ids = {tp.id: set(tp.mask_bars) for tp in self._request.tracks}
+        # Ignored tracks must never be re-classified as context here — an
+        # ignored track has bars=[] and no mask_bars, so every one of its
+        # bars trivially satisfies "not generating, not masked" and this
+        # loop would otherwise force want_ctx=True, overwriting whatever
+        # the planner already correctly set from mask.ignore (see
+        # _build_selection_mask) and putting the "ignored" track's real
+        # content right back into the model's context.
+        ignored_ids = {tp.id for tp in self._request.tracks if tp.ignore}
         for t_idx, row in enumerate(new_ctx):
             if t_idx not in req_ids:
+                continue
+            if t_idx in ignored_ids:
+                if any(row[step.start_bar:step.end_bar]):
+                    for b_abs in range(step.start_bar, min(step.end_bar, len(row))):
+                        row[b_abs] = False
+                    ctx_dirty = True
                 continue
             masked = req_ids[t_idx]
             for b_abs in range(step.start_bar, step.end_bar):
@@ -581,6 +1341,7 @@ class SamplingSession:
 
         _ctx_toks = state.context_tokens()
         context_len = len(_ctx_toks)
+        self.context_len = context_len
         spans = state.hidden_spans() if use_span_masks else []
 
         # Log context token sequence so we can verify what the model sees
@@ -641,6 +1402,7 @@ class SamplingSession:
         if self.enable_profiling:
             self.encode_time += time.perf_counter() - t_enc
         model_max_ctx = self._model_max_context()
+        self.max_context_len = model_max_ctx
         if context_len >= model_max_ctx:
             raise _ContextOverflow(context_len, model_max_ctx)
         max_gen_tokens = model_max_ctx - context_len - 1
@@ -657,11 +1419,20 @@ class SamplingSession:
             )
 
         # Pre-allocate mask buffer once for this step (reused every token).
-        # Allocate on the model device so masked_fill stays device-consistent.
+        # Deliberately kept on CPU, NOT the model device: on MPS every one of
+        # these per-token ops (mask copy, masked_fill, softmax, cumsum, sort,
+        # searchsorted, multinomial) pays a GPU dispatch/sync cost that swamps
+        # their actual (trivial) compute cost — only the batched forward pass
+        # in kv.forward() is big enough to be worth GPU dispatch. `logits` is
+        # pulled to CPU right after the forward pass below (one small D2H
+        # transfer/token) so the whole grammar-mask + sampling pipeline runs
+        # on CPU regardless of model device.
         vocab_size = self._engine._tokenizer.vocab_size()
-        _ikv = self._engine._initial_kv
-        _model_dev = _ikv[0][0].device if _ikv else torch.device("cpu")
-        mask_buf = torch.empty(vocab_size, dtype=torch.bool, device=_model_dev)
+        mask_buf = torch.empty(vocab_size, dtype=torch.bool, device="cpu")
+        # Periodic cache release for very long single attempts — see the
+        # per-request empty_cache() in http/server.py for the fuller
+        # rationale (MPS allocator fragmentation from the growing KV cache).
+        _device_is_mps = next(self._engine._model.parameters()).device.type == "mps"
 
         # Pre-compute token-ID ranges for hard vocab blocks.
         # When microtiming=False, Delta+DeltaDirection tokens are force-zeroed
@@ -678,9 +1449,59 @@ class SamplingSession:
         _delta_dir_range = _tok_range(_core.TokenType.DeltaDirection) if _block_delta else None
         _vel_range       = _tok_range(_core.TokenType.VelocityLevel)  if _block_vel   else None
 
+        # Pitch scale/register control (controls["pitch_mask"]) — hard
+        # allow-set ANDed into mask_buf below, soft shape reweighted into
+        # probs right before the sampling filters.
+        _pitch_range, _pitch_allow, _pitch_shape = self._build_pitch_mask(step)
+
+        # Rhythm control (controls["rhythm_mask"]) — hard exact-position mode
+        # drives a _RhythmForcer that narrows mask_buf every token; soft grid
+        # mode reweights probs like _pitch_shape.
+        _rhythm_range, _rhythm_schedule, _rhythm_grid = self._build_rhythm_mask(step)
+        _rhythm_forcer = None
+        if _rhythm_schedule is not None:
+            _barend_range = _tok_range(_core.TokenType.BarEnd)
+            _onset_range = _tok_range(_core.TokenType.NoteOnset)
+            _vel_range_any = _tok_range(_core.TokenType.VelocityLevel)
+            _rhythm_forcer = _RhythmForcer(
+                _rhythm_schedule, _rhythm_range, _onset_range, _vel_range_any, _barend_range[0]
+            )
+
+        # Variation/remix (controls["remix"]) — forces the reference score's
+        # onset schedule exactly (like a rhythm_mask derived from it) while
+        # independently resampling p% of note-level values. Mutually
+        # exclusive with rhythm_mask on the same track (validation.py), so
+        # at most one of _rhythm_forcer / _variation_forcer is ever active.
+        _remix_mode, _remix_amount, _remix_bars = self._build_remix_schedule(score, step)
+        _variation_forcer = None
+        if _remix_bars is not None:
+            _pos_range_r = _tok_range(_core.TokenType.TimeAbsolutePos)
+            _barend_range_r = _tok_range(_core.TokenType.BarEnd)
+            _onset_range_r = _tok_range(_core.TokenType.NoteOnset)
+            _dur_range_r = _tok_range(_core.TokenType.NoteDuration)
+            _vel_range_r = _tok_range(_core.TokenType.VelocityLevel)
+            _variation_forcer = _VariationForcer(
+                _remix_mode, _remix_amount, _remix_bars,
+                _pos_range_r, _onset_range_r, _dur_range_r, _vel_range_r, _barend_range_r[0],
+            )
+
+        # Baseline for the note_sink diff: decode BEFORE any tokens are
+        # generated (context + not-yet-generated target bars, however the
+        # decoder resolves those — typically empty). Without this, the
+        # first diff would have no baseline to compare against and either
+        # lose the first note entirely or flood the stream with every
+        # pre-existing context note mislabeled as "new".
+        _last_streamed_partial = (
+            self._engine._tokenizer.normalize_output(from_cpp(state.result()))
+            if self.note_sink is not None else None
+        )
         kv = _KVRunner(self._engine._model, self._engine._initial_kv)
         with torch.no_grad():
-            while not state.complete() and self.gen_count < max_gen_tokens:
+            while (
+                not state.complete()
+                and self.gen_count < max_gen_tokens
+                and not (self.cancel_event is not None and self.cancel_event.is_set())
+            ):
                 is_prefill = kv.is_prefill
 
                 # Build ctx and determine key_mask / position_ids for this step
@@ -714,6 +1535,8 @@ class SamplingSession:
 
                 t_fwd = time.perf_counter()
                 logits_seq = kv.forward(ctx, key_mask=km, position_ids=pos_ids)
+                if logits_seq.device.type == "mps":
+                    torch.mps.synchronize()
                 if self.enable_profiling:
                     self.model_forward_time += time.perf_counter() - t_fwd
 
@@ -727,7 +1550,10 @@ class SamplingSession:
                     kv.null_positions(spans)
                     _approx_surgery_done = True
 
-                logits = logits_seq[0, -1]
+                # Single small D2H transfer/token — everything downstream
+                # (grammar mask, softmax, sampling filters, multinomial) runs
+                # on CPU from here on. See mask_buf comment above for why.
+                logits = logits_seq[0, -1].to("cpu", non_blocking=False)
 
                 # Reuse pre-allocated bool buffer for grammar mask
                 mask_buf.copy_(torch.as_tensor(state.logit_mask(), dtype=torch.bool))
@@ -741,6 +1567,13 @@ class SamplingSession:
                     mask_buf[_delta_dir_range[0]:_delta_dir_range[1]] = False
                 if _vel_range is not None:
                     mask_buf[_vel_range[0]:_vel_range[1]] = False
+                if _pitch_allow is not None:
+                    lo, hi = _pitch_range
+                    mask_buf[lo:hi] &= _pitch_allow
+                if _rhythm_forcer is not None:
+                    _rhythm_forcer.apply(mask_buf)
+                if _variation_forcer is not None:
+                    _variation_forcer.apply(mask_buf)
 
                 n_legal = int(mask_buf.sum().item())
                 if n_legal == 0:
@@ -772,6 +1605,22 @@ class SamplingSession:
                     probs = mask_buf.to(torch.float32)
                     probs = probs / probs.sum()
 
+                if _pitch_shape is not None:
+                    lo, hi = _pitch_range
+                    probs = probs.clone()
+                    probs[lo:hi] = probs[lo:hi] * _pitch_shape
+                    _shape_total = float(probs.sum().item())
+                    if _shape_total > 0:
+                        probs = probs / _shape_total
+
+                if _rhythm_grid is not None:
+                    lo, hi = _rhythm_range
+                    probs = probs.clone()
+                    probs[lo:hi] = probs[lo:hi] * _rhythm_grid
+                    _shape_total = float(probs.sum().item())
+                    if _shape_total > 0:
+                        probs = probs / _shape_total
+
                 probs = self._apply_sampling_filters(probs)
 
                 token = torch.multinomial(probs, 1).item()
@@ -783,6 +1632,10 @@ class SamplingSession:
                     _, tval = self._engine._tokenizer._vocab.decode(token)
                 except Exception:
                     tname, tval = "?", -1
+                if _rhythm_forcer is not None:
+                    _rhythm_forcer.advance(tname)
+                if _variation_forcer is not None:
+                    _variation_forcer.advance(tname)
 
                 # Log this token (T=1 raw probs, grammar mask, model top-5)
                 if _tlogger is not None:
@@ -814,12 +1667,42 @@ class SamplingSession:
                     continue
                 state.advance(token)
                 self.gen_count += 1
+                if _device_is_mps and self.gen_count % 200 == 0:
+                    torch.mps.empty_cache()
                 # attention: extend buffer pointer for generated token
                 if mask_mode == "attention" and _kv_buf is not None:
                     _kv_len += 1
                 # attention_skip: advance next position_id
                 elif mask_mode == "attention_skip" and _skip_ctx is not None:
                     _next_pos += 1
+
+                # Streaming: a note is fully formed the instant its
+                # NoteDuration token lands (pitch + duration both known,
+                # velocity already applied for anything preceding it in the
+                # decode). Re-decode the partial score and diff against the
+                # last streamed snapshot rather than hand-tracking
+                # pitch/position/velocity ourselves — reuses the same
+                # decode path a natural completion uses, so it can't drift
+                # out of sync with what the final result will actually say.
+                if self.note_sink is not None and tname == "NoteDuration":
+                    partial = self._engine._tokenizer.normalize_output(from_cpp(state.result()))
+                    new_notes = self._diff_notes(_last_streamed_partial, partial)
+                    if new_notes:
+                        self.note_sink(new_notes)
+                    _last_streamed_partial = partial
+
+        # Loop exited either because state.complete() (natural stop — the
+        # grammar reached a valid end, e.g. all requested bars filled) or
+        # because gen_count hit max_gen_tokens (context budget ran out
+        # first). Distinguish them: a truncated generation may have stopped
+        # mid-bar/mid-track, not because it was actually "done".
+        self.truncated = not state.complete()
+        if self.truncated:
+            log.warning(
+                "generation truncated: hit max_gen_tokens=%d before the grammar "
+                "reached a natural stop (context_len=%d)",
+                max_gen_tokens, context_len,
+            )
 
         # Step summary: token-type counts, context size, grammar collapses
         if _tlogger is not None:
@@ -841,7 +1724,435 @@ class SamplingSession:
             _tlogger.log_bar_summaries(result, self._request, sorted(gap_bar_set),
                                        tpb_spq=0)  # tpb_spq unused (bar index used directly)
 
+        if self.cancel_event is not None and self.cancel_event.is_set():
+            log.info("generation cancelled (gen_count=%d)", self.gen_count)
+            raise GenerationCancelled(result, self.gen_count)
+
         return result
+
+    def _sample_step_batch(
+        self, score: Score, step, temperatures: list, seeds: list
+    ) -> list:
+        """Batched variant of _sample_step: runs len(temperatures) independent
+        generation attempts (one row per attempt, same prompt, own
+        temperature/seed/grammar-state each) as ONE forward pass per token
+        step instead of len(temperatures) sequential single-row passes.
+
+        Turns a latency-bound sequential decode (can't fill a GPU at
+        batch=1) into a throughput-bound batched decode. Scoped to requests
+        with zero hidden spans — raises _BatchNotEligible otherwise, and the
+        caller (_run_step) falls back to the sequential path.
+
+        Returns a list of
+        (candidate_score_or_None, gen_count, error_or_None, truncated)
+        tuples, one per row, in the same order as `temperatures`/`seeds`.
+        truncated=True means this row hit max_gen_tokens (context budget)
+        before its grammar reached a natural stop — its content may end
+        mid-bar/mid-track rather than because it was actually finished.
+        """
+        try:
+            import torch
+        except ImportError:
+            raise ImportError("pip install midigpt[inference]") from None
+
+        B = len(temperatures)
+
+        # ---- Setup below mirrors _sample_step exactly, run ONCE: it's a
+        # pure function of (score, request), independent of seed/temperature,
+        # so redoing it per-row (like the sequential path effectively does,
+        # once per attempt) would be pointless duplicated work. ----
+        full_ar_ids: set[int] = set()
+        for tp in self._request.tracks:
+            if tp.autoregressive and (not tp.bars or min(tp.bars) == 0):
+                full_ar_ids.add(tp.id)
+        self._full_ar_ids = full_ar_ids
+        analyzer = self._engine._analyzer
+        if analyzer is not None:
+            for t_idx, track in enumerate(score.tracks):
+                if t_idx in full_ar_ids:
+                    continue
+                new_attrs = dict(track.attributes)
+                new_attrs.update(analyzer.compute_track_tokens(score, t_idx))
+                for b_idx in range(len(track.bars)):
+                    for k, v in analyzer.compute_bar_tokens(score, t_idx, b_idx).items():
+                        new_attrs[f"bar_{k}_{b_idx}"] = v
+                track.attributes = new_attrs
+
+        for tp in self._request.tracks:
+            if tp.id < len(score.tracks) and tp.id not in full_ar_ids:
+                score.tracks[tp.id].attributes.update(tp.attributes)
+
+        for tp in self._request.tracks:
+            if tp.id >= len(score.tracks):
+                continue
+            track_attrs = score.tracks[tp.id].attributes
+            if tp.id in full_ar_ids:
+                continue
+            for bar_idx, bar_dict in (tp.bar_attributes or {}).items():
+                for attr_name, val in (bar_dict or {}).items():
+                    attr_obj = (
+                        analyzer.get(attr_name) if (analyzer and hasattr(analyzer, "get")) else None
+                    )
+                    if attr_obj is None:
+                        continue
+                    track_attrs[f"bar_{attr_obj.token_type}_{int(bar_idx)}"] = int(val)
+            for bar_idx, bar_dict in (tp.bar_controls or {}).items():
+                for ctrl_name, val in (bar_dict or {}).items():
+                    if ctrl_name == "time_signature":
+                        track_attrs[f"bar_TimeSig_{int(bar_idx)}"] = int(val)
+
+        gen_set = set(step.bars_to_generate)
+        new_ctx = [list(row) for row in step.context]
+        ctx_dirty = False
+        req_ids = {tp.id: set(tp.mask_bars) for tp in self._request.tracks}
+        # See the matching comment in _sample_step — ignored tracks must
+        # stay excluded from context here, not get re-classified as True.
+        ignored_ids = {tp.id for tp in self._request.tracks if tp.ignore}
+        for t_idx, row in enumerate(new_ctx):
+            if t_idx not in req_ids:
+                continue
+            if t_idx in ignored_ids:
+                if any(row[step.start_bar:step.end_bar]):
+                    for b_abs in range(step.start_bar, min(step.end_bar, len(row))):
+                        row[b_abs] = False
+                    ctx_dirty = True
+                continue
+            masked = req_ids[t_idx]
+            for b_abs in range(step.start_bar, step.end_bar):
+                if b_abs >= len(row):
+                    continue
+                want_ctx = (t_idx, b_abs) not in gen_set and b_abs not in masked
+                if row[b_abs] != want_ctx:
+                    row[b_abs] = want_ctx
+                    ctx_dirty = True
+        if ctx_dirty:
+            step.context = new_ctx
+
+        if self.prompt_state_sink is not None and not self._snapshot_sent:
+            self._snapshot_sent = True
+            try:
+                self.prompt_state_sink(self._snapshot_prompt_state(step))
+            except Exception as exc:
+                log.warning("prompt_state_sink failed: %s", exc)
+
+        t_enc = time.perf_counter()
+        mask_mode = getattr(self._request.config, "mask_mode", "token")
+        use_span_masks = mask_mode in ("attention", "attention_approx", "attention_skip")
+
+        piece_controls = getattr(self._request, "controls", {}) or {}
+        _use_velocity    = (1 if piece_controls["velocity"]    else 0) if "velocity"    in piece_controls else -1
+        _use_microtiming = (1 if piece_controls["microtiming"] else 0) if "microtiming" in piece_controls else -1
+        _genre = -1
+        if "genre" in piece_controls:
+            grouping = self._engine._tokenizer._vocab.config().genre_grouping
+            if grouping is not None:
+                _genre = grouping.encode(piece_controls["genre"])
+
+        score = self._engine._tokenizer.normalize_input(score)
+
+        # One independent grammar-state machine per row — .advance() mutates
+        # it in place, so rows can't share an instance once sampling diverges
+        # (which happens immediately: different seeds -> different tokens).
+        # Constraint graphs are stateful too (track constraint-satisfaction
+        # progress as tokens are advanced), so each row needs its OWN
+        # instance as well — a shared one would get corrupted by interleaved
+        # .advance() calls from different rows, exactly like the shared
+        # SessionState issue above.
+        states = [
+            _core.SessionState(
+                to_cpp(copy.deepcopy(score)), step,
+                self._engine._tokenizer._vocab,
+                self._build_constraints(step),
+                self._engine._tokenizer._encoder,
+                self._engine._tokenizer._decoder,
+                use_span_masks=use_span_masks,
+                remove_future_bars=(mask_mode == "remove"),
+                use_velocity=_use_velocity,
+                use_microtiming=_use_microtiming,
+                genre=_genre,
+            )
+            for _ in range(B)
+        ]
+
+        # Batching only covers the "nothing hidden" case (see class docstring
+        # on _BatchNotEligible) — bail out to the sequential path otherwise.
+        spans = states[0].hidden_spans() if use_span_masks else []
+        if spans:
+            raise _BatchNotEligible(
+                f"{len(spans)} hidden span(s) for mask_mode={mask_mode!r}; "
+                "batched span-masking isn't implemented"
+            )
+
+        _ctx_toks = states[0].context_tokens()  # identical across rows: same prompt
+        context_len = len(_ctx_toks)
+        self.context_len = context_len
+
+        _tlogger = getattr(self, "token_logger", None)
+        if _tlogger is not None:
+            _tlogger.log_context(list(_ctx_toks), self._engine._tokenizer._vocab)
+
+        _use_vel_actual = 0
+        for _vtid in _ctx_toks:
+            try:
+                if self._engine._tokenizer._vocab.get_type(_vtid).name == "VelocityLevel":
+                    _use_vel_actual = 1
+                    break
+            except Exception:
+                pass
+
+        if self.enable_profiling:
+            self.encode_time += time.perf_counter() - t_enc
+        model_max_ctx = self._model_max_context()
+        self.max_context_len = model_max_ctx
+        if context_len >= model_max_ctx:
+            raise _ContextOverflow(context_len, model_max_ctx)
+        max_gen_tokens = model_max_ctx - context_len - 1
+        n_gen_tracks = sum(1 for tp in self._request.tracks
+                           if not getattr(tp, "ignore", False) and tp.bars)
+        if max_gen_tokens < n_gen_tracks * 20:
+            import warnings
+            warnings.warn(
+                f"Context nearly full: {context_len}/{model_max_ctx} tokens, "
+                f"only {max_gen_tokens} tokens left for {n_gen_tracks} generating tracks "
+                f"(~{max_gen_tokens // max(n_gen_tracks, 1)} per track). "
+                f"Late tracks may be silently truncated.",
+                stacklevel=3,
+            )
+
+        vocab_size = self._engine._tokenizer.vocab_size()
+        mask_buf = torch.empty(vocab_size, dtype=torch.bool, device="cpu")
+        _device_is_mps = next(self._engine._model.parameters()).device.type == "mps"
+
+        def _tok_range(tt: "_core.TokenType"):
+            s, e = self._engine._tokenizer._vocab.range(tt)
+            return (s, e) if s >= 0 and e > s else None
+
+        _block_delta = _use_microtiming == 0
+        _block_vel   = _use_velocity == 0
+        _delta_range     = _tok_range(_core.TokenType.Delta)          if _block_delta else None
+        _delta_dir_range = _tok_range(_core.TokenType.DeltaDirection) if _block_delta else None
+        _vel_range       = _tok_range(_core.TokenType.VelocityLevel)  if _block_vel   else None
+
+        # Pitch scale/register control — see the matching comment in
+        # _sample_step. Computed once for the whole batch: every row shares
+        # the same prompt/step, only seed/temperature differ per row.
+        _pitch_range, _pitch_allow, _pitch_shape = self._build_pitch_mask(step)
+
+        # Rhythm control — see the matching comment in _sample_step. One
+        # _RhythmForcer PER ROW: rows are otherwise expected to stay in
+        # lockstep on a deterministic schedule, but a row that dies early
+        # (row_errors[i] set) must not corrupt another row's progress.
+        _rhythm_range, _rhythm_schedule, _rhythm_grid = self._build_rhythm_mask(step)
+        _rhythm_forcers = [None] * B
+        if _rhythm_schedule is not None:
+            _barend_range = _tok_range(_core.TokenType.BarEnd)
+            _onset_range = _tok_range(_core.TokenType.NoteOnset)
+            _vel_range_any = _tok_range(_core.TokenType.VelocityLevel)
+            _rhythm_forcers = [
+                _RhythmForcer(_rhythm_schedule, _rhythm_range, _onset_range, _vel_range_any, _barend_range[0])
+                for _ in range(B)
+            ]
+
+        # Variation/remix — see the matching comment in _sample_step. One
+        # _VariationForcer PER ROW (each row rolls its own force/resample
+        # decisions independently — that's the entire point of a batch of
+        # candidates for the same remix request).
+        _remix_mode, _remix_amount, _remix_bars = self._build_remix_schedule(score, step)
+        _variation_forcers = [None] * B
+        if _remix_bars is not None:
+            _pos_range_r = _tok_range(_core.TokenType.TimeAbsolutePos)
+            _barend_range_r = _tok_range(_core.TokenType.BarEnd)
+            _onset_range_r = _tok_range(_core.TokenType.NoteOnset)
+            _dur_range_r = _tok_range(_core.TokenType.NoteDuration)
+            _vel_range_r = _tok_range(_core.TokenType.VelocityLevel)
+            _variation_forcers = [
+                _VariationForcer(
+                    _remix_mode, _remix_amount, _remix_bars,
+                    _pos_range_r, _onset_range_r, _dur_range_r, _vel_range_r, _barend_range_r[0],
+                )
+                for _ in range(B)
+            ]
+
+        # Independent RNG stream per row, seeded once — NOT re-seeded every
+        # token. torch.multinomial(..., generator=g) draws from g's own
+        # advancing stream, so rows don't interfere with each other despite
+        # sharing one Python-level token loop. seed<0 -> None -> falls back
+        # to the shared global generator (matches the sequential path's
+        # "seed<0 leaves RNG state alone, don't-care-about-reproducibility"
+        # semantics).
+        row_generators = [
+            torch.Generator().manual_seed(int(seeds[i])) if seeds[i] is not None and seeds[i] >= 0 else None
+            for i in range(B)
+        ]
+
+        kv = _KVRunner(self._engine._model, self._engine._initial_kv)
+        done = [False] * B
+        gen_counts = [0] * B
+        row_errors = [None] * B
+        last_tokens = [None] * B
+
+        with torch.no_grad():
+            is_prefill = True
+            while (
+                not all(done)
+                and max(gen_counts) < max_gen_tokens
+                and not (self.cancel_event is not None and self.cancel_event.is_set())
+            ):
+                if is_prefill:
+                    ctx = torch.tensor([_ctx_toks], dtype=torch.long).repeat(B, 1)
+                else:
+                    # Finished rows keep getting fed their own last token —
+                    # wasted compute for them, but keeps the batch shape
+                    # fixed and simple; their output is discarded below.
+                    ctx = torch.tensor(
+                        [[last_tokens[i] if last_tokens[i] is not None else 0] for i in range(B)],
+                        dtype=torch.long,
+                    )
+
+                t_fwd = time.perf_counter()
+                logits_seq = kv.forward(ctx)
+                if logits_seq.device.type == "mps":
+                    torch.mps.synchronize()
+                if self.enable_profiling:
+                    self.model_forward_time += time.perf_counter() - t_fwd
+                is_prefill = False
+
+                # One D2H transfer for the whole batch's last-position logits.
+                logits_batch = logits_seq[:, -1, :].to("cpu", non_blocking=False)
+
+                for i in range(B):
+                    if done[i]:
+                        continue
+                    mask_buf.copy_(torch.as_tensor(states[i].logit_mask(), dtype=torch.bool))
+                    if _delta_range is not None:
+                        mask_buf[_delta_range[0]:_delta_range[1]] = False
+                    if _delta_dir_range is not None:
+                        mask_buf[_delta_dir_range[0]:_delta_dir_range[1]] = False
+                    if _vel_range is not None:
+                        mask_buf[_vel_range[0]:_vel_range[1]] = False
+                    if _pitch_allow is not None:
+                        lo, hi = _pitch_range
+                        mask_buf[lo:hi] &= _pitch_allow
+                    if _rhythm_forcers[i] is not None:
+                        _rhythm_forcers[i].apply(mask_buf)
+                    if _variation_forcers[i] is not None:
+                        _variation_forcers[i].apply(mask_buf)
+
+                    n_legal = int(mask_buf.sum().item())
+                    if n_legal == 0:
+                        if _tlogger is not None:
+                            _tlogger.log_grammar_collapse(gen_counts[i], 0)
+                        row_errors[i] = (
+                            "sampling crashed: constraint graph error "
+                            "(zero legal tokens at this step — over-constrained "
+                            "attribute values or incompatible grammar state)"
+                        )
+                        done[i] = True
+                        continue
+
+                    masked_logits = logits_batch[i].masked_fill(~mask_buf, float("-inf"))
+                    probs = (masked_logits / temperatures[i]).softmax(-1)
+
+                    if torch.isnan(probs.sum()) or probs.sum() < 1e-6:
+                        if _tlogger is not None:
+                            _tlogger.log_grammar_collapse(gen_counts[i], n_legal)
+                        probs = mask_buf.to(torch.float32)
+                        probs = probs / probs.sum()
+
+                    if _pitch_shape is not None:
+                        lo, hi = _pitch_range
+                        probs = probs.clone()
+                        probs[lo:hi] = probs[lo:hi] * _pitch_shape
+                        _shape_total = float(probs.sum().item())
+                        if _shape_total > 0:
+                            probs = probs / _shape_total
+
+                    if _rhythm_grid is not None:
+                        lo, hi = _rhythm_range
+                        probs = probs.clone()
+                        probs[lo:hi] = probs[lo:hi] * _rhythm_grid
+                        _shape_total = float(probs.sum().item())
+                        if _shape_total > 0:
+                            probs = probs / _shape_total
+
+                    probs = self._apply_sampling_filters(probs)
+
+                    gen = row_generators[i]
+                    token = (
+                        torch.multinomial(probs, 1, generator=gen).item()
+                        if gen is not None
+                        else torch.multinomial(probs, 1).item()
+                    )
+
+                    if _rhythm_forcers[i] is not None or _variation_forcers[i] is not None or _tlogger is not None:
+                        try:
+                            tname = self._engine._tokenizer._vocab.get_type(token).name
+                            _, tval = self._engine._tokenizer._vocab.decode(token)
+                        except Exception:
+                            tname, tval = "?", -1
+                        if _tlogger is not None:
+                            _tlogger.log_token(
+                                gen_counts[i], token, tname, tval,
+                                probs.cpu(), mask_buf.cpu(),
+                                self._engine._tokenizer._vocab,
+                            )
+                        if _rhythm_forcers[i] is not None:
+                            _rhythm_forcers[i].advance(tname)
+                        if _variation_forcers[i] is not None:
+                            _variation_forcers[i].advance(tname)
+
+                    states[i].advance(token)
+                    last_tokens[i] = token
+                    gen_counts[i] += 1
+                    if states[i].complete():
+                        done[i] = True
+
+                self.gen_count = sum(gen_counts)
+                if _device_is_mps and self.gen_count % 200 == 0:
+                    torch.mps.empty_cache()
+
+        # Per-row: did THIS row's grammar reach a natural stop, or did the
+        # batched loop end (globally, once the furthest-along row hit
+        # max_gen_tokens) before it got there? A row can be "not done" here
+        # for either reason — treat both as truncated (its output may have
+        # stopped mid-bar/mid-track, not because it was actually finished).
+        row_truncated = [not states[i].complete() for i in range(B)]
+        self.truncated = any(row_truncated[i] for i in range(B) if row_errors[i] is None)
+        if self.truncated:
+            log.warning(
+                "run_variations/batch_attempts: %d/%d row(s) truncated (hit "
+                "max_gen_tokens=%d before a natural stop)",
+                sum(1 for i in range(B) if row_truncated[i] and row_errors[i] is None),
+                B, max_gen_tokens,
+            )
+
+        if _tlogger is not None:
+            _tlogger.log_step_summary(context_len, max_gen_tokens, n_gen_tracks,
+                                      request=self._request,
+                                      use_velocity=_use_vel_actual)
+
+        t_dec = time.perf_counter()
+        results = []
+        for i in range(B):
+            if row_errors[i] is not None:
+                results.append((None, gen_counts[i], row_errors[i], row_truncated[i]))
+                continue
+            result = self._engine._tokenizer.normalize_output(from_cpp(states[i].result()))
+            if _tlogger is not None:
+                gap_bar_set = set()
+                for tp in self._request.tracks:
+                    if not getattr(tp, "ignore", False) and tp.bars:
+                        gap_bar_set.update(tp.bars)
+                _tlogger.log_bar_summaries(result, self._request, sorted(gap_bar_set), tpb_spq=0)
+            results.append((result, gen_counts[i], None, row_truncated[i]))
+        if self.enable_profiling:
+            self.decode_time += time.perf_counter() - t_dec
+
+        if self.cancel_event is not None and self.cancel_event.is_set():
+            log.info("batched generation cancelled (gen_count=%d)", self.gen_count)
+            raise GenerationCancelled(results, self.gen_count)
+
+        return results
 
     def score_from_tokens(
         self,
@@ -1066,7 +2377,7 @@ class SamplingSession:
         # top_p: nucleus — keep smallest descending-prob set with cumsum ≥ top_p
         if 0.0 < top_p < 1.0:
             # rank at which cumsum first ≥ top_p (inclusive)
-            nucleus_rank = int(torch.searchsorted(cumsum, torch.tensor(top_p)).item()) + 1
+            nucleus_rank = int(torch.searchsorted(cumsum, torch.tensor(top_p, device=cumsum.device)).item()) + 1
             nucleus_rank = max(1, min(nucleus_rank, sorted_idx.numel()))
             nucleus = sorted_idx[:nucleus_rank]
             new_keep = torch.zeros_like(keep)
@@ -1091,7 +2402,7 @@ class SamplingSession:
 
         # mask_p: remove most-likely tokens summing (cumulative) to ≥ mask_p
         if 0.0 < mask_p < 1.0 and survivors_n > 0:
-            drop_rank = int(torch.searchsorted(cumsum2, torch.tensor(mask_p)).item()) + 1
+            drop_rank = int(torch.searchsorted(cumsum2, torch.tensor(mask_p, device=cumsum2.device)).item()) + 1
             drop_rank = min(drop_rank, survivors_n - 1)  # never empty the pool
             if drop_rank > 0:
                 drop = sorted_idx2[:drop_rank]
