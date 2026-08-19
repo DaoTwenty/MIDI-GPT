@@ -11,6 +11,16 @@ section above `[Unreleased]` before tagging.
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-08-19
+
+### Added
+- **Multi-model HTTP serving:** `midigpt-http` now serves multiple checkpoints from one process, selectable per-request, configurable via a config file, with request backpressure (503 retry passthrough) under load.
+- **Pitch masks:** `TrackPrompt.controls["pitch_mask"]` restricts/shapes which pitches a track's `NoteOnset` tokens may sample — hard allow-set (exact pitches, scale+root preset, or pitch classes) plus an optional soft reweight (`shape: uniform` or `normal`).
+- **Rhythm masks:** `TrackPrompt.controls["rhythm_mask"]` restricts/shapes which within-bar ticks a track's `TimeAbsolutePos` tokens may land on — hard exact rhythm via `positions` (onset ticks + polyphony), or soft grid-granularity bias via `grid` (`{"unit": "eighth", "strength": 0.8}`).
+- **Remix schedules:** `TrackPrompt.controls["remix"]` regenerates a track's bars as a partial variation of content already on the score — onset schedule reproduced exactly, only note-level values (`mode: "pitch"` or `"full"`) are eligible for resampling.
+- **Cancellable sessions:** `GenerationCancelled` is now raised (and exported) so an in-flight `SamplingSession` can be stopped and return its partial result instead of erroring out.
+- **Batched multi-candidate decoding:** `_sample_step_batch` supports `num_candidates > 1`.
+
 ## [0.3.3] - 2026-07-28
 
 ### Fixed
