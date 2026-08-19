@@ -18,7 +18,7 @@ pip install "midigpt[inference]"
 from midigpt import Score, Track, Bar
 from midigpt.inference import InferenceEngine, GenerationRequest, InferenceConfig, TrackPrompt
 
-engine = InferenceEngine.from_pretrained("yellow")
+engine = InferenceEngine.from_pretrained("yellow_medium")
 
 # 4-bar score with one empty melodic track
 score = Score(tracks=[Track(bars=[Bar() for _ in range(4)])])

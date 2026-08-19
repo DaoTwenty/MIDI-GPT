@@ -8,7 +8,7 @@ This page covers training a new midigpt model from scratch, or fine-tuning an ex
 pip install "midigpt[train]"
 ```
 
-Training requires PyTorch Lightning, HuggingFace `datasets`, and `pyarrow`. The C++ MIDI parser is not fork-safe, so `num_workers` must be `0`.
+Training requires PyTorch Lightning, HuggingFace `datasets`, and `pyarrow`. The C++ MIDI parser is not fork-safe, so `num_workers` defaults to `0`; going above 0 is safe because the data loader uses a `spawn` multiprocessing context instead of `fork`.
 
 ---
 
@@ -82,17 +82,19 @@ train(
 | `n_embd` | `512` | Embedding dimension |
 | `n_layer` | `6` | Number of transformer layers |
 | `n_head` | `8` | Number of attention heads |
-| `n_positions` | `2048` | Maximum sequence length (positional embeddings) |
+
+The model's `n_positions` (positional embedding budget) is not a separate field — it's set from `max_seq_len` below when the model is built, and training fails fast if `max_seq_len` exceeds it.
 
 ### Data
 
 | Field | Default | Description |
 |---|---|---|
 | `max_seq_len` | `2048` | Token sequence cap — truncated to this length |
-| `num_bars_choices` | `[4, 8]` | Window sizes sampled during training |
 | `min_tracks` | `1` | Minimum tracks per sample |
-| `max_tracks` | `4` | Maximum tracks per sample |
+| `max_tracks` | `12` | Maximum tracks per sample |
 | `min_fill_ratio` | `0.75` | Minimum note density required to accept a window |
+
+Window sizes (bars per training sample) aren't a `TrainConfig` field either — they're read from the encoder config's `num_bars_map` and sampled per example by the dataset.
 
 ### Training objective
 
@@ -107,19 +109,19 @@ train(
 
 | Field | Default | Description |
 |---|---|---|
-| `learning_rate` | `1e-4` | Peak learning rate |
-| `batch_size` | `16` | Per-GPU batch size |
-| `max_steps` | `100000` | Total training steps |
-| `warmup_steps` | `1000` | Linear LR warmup steps |
+| `learning_rate` | `5e-5` | Peak learning rate |
+| `per_device_batch_size` | `4` | Per-GPU batch size |
+| `max_steps` | `0` | Total training steps — `0` means use `num_epochs` instead to derive the total |
+| `warmup_steps` | `500` | Linear LR warmup steps |
 | `precision` | `"fp16"` | `"fp16"`, `"bf16"`, or `"fp32"` |
 
 ### Infrastructure
 
 | Field | Default | Description |
 |---|---|---|
-| `num_workers` | `0` | **Must be 0** — the C++ MIDI parser is not fork-safe |
-| `save_steps` | `5000` | Save a checkpoint every N steps |
-| `eval_steps` | `1000` | Run validation every N steps |
+| `num_workers` | `0` | Data loader worker processes. The C++ MIDI parser isn't fork-safe, but the loader uses a `spawn` context, so raising this above 0 is safe |
+| `save_steps` | `1000` | Save a checkpoint every N steps |
+| `eval_steps` | `500` | Run validation every N steps |
 | `logger` | `"none"` | `"tensorboard"`, `"wandb"`, or `"none"` |
 | `output_dir` | `"checkpoints"` | Where to write checkpoints and the final bundle |
 

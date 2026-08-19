@@ -75,17 +75,18 @@ Top-level entry point. Owns the model, tokenizer, and attribute analyzer.
 @classmethod
 def from_pretrained(
     cls,
-    name_or_repo_id: str,
-    filename: str | None = None,
+    name: str,
+    hf_repo: str = "Metacreation/MIDI-GPT",
     analyzer: AttributeAnalyzer | None = None,
+    device: str | None = None,
 ) -> InferenceEngine
 ```
 
-Load by short name (`"yellow"`, `"yellow_small"`, `"expressive"`, `"prism_medium"`) or by HuggingFace repo ID + filename. Downloads and caches via `huggingface_hub`.
+`name` is the checkpoint filename prefix on the repo, e.g. `yellow_medium`, `prism_medium`, `expressive_medium`. The actual filename is resolved dynamically — prefers `<name>-final.safetensors`, falls back to the highest-step snapshot. Downloads and caches via `huggingface_hub`. `device`: `"cpu"`, `"cuda"`, `"mps"`, or `None`/`"auto"` to auto-detect.
 
 ```python
-engine = InferenceEngine.from_pretrained("yellow")
-engine = InferenceEngine.from_pretrained("Metacreation/MIDI-GPT", filename="yellow_medium-final.safetensors")
+engine = InferenceEngine.from_pretrained("yellow_medium")
+engine = InferenceEngine.from_pretrained("prism_medium", hf_repo="myorg/myrepo", device="cuda")
 ```
 
 ### `InferenceEngine.from_checkpoint`
@@ -96,10 +97,11 @@ def from_checkpoint(
     cls,
     path: str,
     analyzer: AttributeAnalyzer | None = None,
+    device: str | None = None,
 ) -> InferenceEngine
 ```
 
-Load from a local packed `.pt` bundle or a legacy checkpoint directory.
+Load from a local `.safetensors` file, packed `.pt` bundle, or a legacy checkpoint directory.
 
 ### `InferenceEngine.session`
 
@@ -150,9 +152,20 @@ Describes what to do with one track.
 | `ignore` | bool | `False` | Exclude this track from the token stream entirely |
 | `mask_bars` | list[int] | `[]` | Bars to hide with MASK_BAR (disjoint from `bars`) |
 | `attributes` | dict[str, int] | `{}` | Quantized attribute overrides for the whole track |
-| `controls` | dict[str, Any] | `{}` | Non-attribute token locks, e.g. `{"time_signature": 0}` |
+| `controls` | dict[str, Any] | `{}` | Non-attribute, first-class controls — see below |
 | `bar_attributes` | dict[int, dict] | `{}` | Per-bar attribute overrides keyed by absolute bar index |
 | `bar_controls` | dict[int, dict] | `{}` | Per-bar control overrides keyed by absolute bar index |
+
+### `controls` keys
+
+Check a checkpoint's `supports_*` capabilities (`GET /info` — see [HTTP Server](http.md)) before relying on any of these; not every model supports every control.
+
+| Key | Type | Description |
+|---|---|---|
+| `time_signature` | int | Index into `encoder_config.time_signatures` |
+| `pitch_mask` | dict | Restrict/shape which pitches this track's `NoteOnset` tokens may sample. Hard allow-set (pick one): `{"pitches": [60, 62, 64]}` (exact MIDI pitches), `{"scale": "major", "root": 0}` (preset name + pitch class 0–11), or `{"pitch_classes": [0, 2, 4, 5, 7, 9, 11]}` (any octave). Optional soft reweight layered on top: `"shape": {"type": "uniform", "min": 48, "max": 72}` or `"shape": {"type": "normal", "mean": 60, "std": 8}` |
+| `rhythm_mask` | dict | Restrict/shape which within-bar tick this track's `TimeAbsolutePos` tokens may land on. Mutually exclusive (pick one): `"positions"` — hard exact rhythm, forces the onset grid and polyphony exactly (`[{"pos": 0, "polyphony": 1}, {"pos": 24, "polyphony": 2}]`; first entry must be `pos=0`; requires `config.mask_mode` to leave `tracks_per_step == 1`), or `"grid"` — soft grid-granularity bias (`{"unit": "eighth", "strength": 0.8}`; `unit`: whole/half/quarter/eighth/sixteenth/quarter_triplet/eighth_triplet/sixteenth_triplet; `strength` 1.0 = hard-quantize, 0.0 = no bias) |
+| `remix` | dict | Regenerate this track's bars as a partial variation of content already on `score` for those bars, instead of generating fresh. The onset schedule (which ticks have notes, how many per tick) is always reproduced exactly from the reference — only note-level values are eligible for resampling. `{"amount": 0.3, "mode": "pitch"}`: `amount` is the fraction of eligible note-attributes resampled (0–1); `mode: "pitch"` — only pitch is eligible, duration stays exact ("vary notes, keep the rhythm"); `mode: "full"` — pitch and duration are each independently eligible. Velocity is always left to free sampling in both modes |
 
 ---
 
@@ -198,6 +211,12 @@ Controls the step planner and sampling pipeline.
 | `polyphony_hard_limit` | int | 0 | Reject tokens that would exceed this simultaneous-note count (0 = off) |
 | `density_hard_limit` | int | 0 | Reject tokens that would exceed this notes-per-bar count (0 = off) |
 
+### Candidates
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `num_candidates` | int | 1 | Independent full generations from the same prompt (one seed each), no accept/reject filtering — see `SamplingSession.run_variations`. Not the same as `max_attempts`, which retries the *same* candidate on rejection |
+
 ---
 
 ## `SamplingSession`
@@ -225,6 +244,22 @@ def gen_count(self) -> int
 
 Number of bars generated so far. Useful for progress tracking when running steps manually.
 
+### `SamplingSession.run_variations`
+
+```python
+def run_variations(self) -> list
+```
+
+`config.num_candidates` independent full generations from the same prompt — one seed per candidate, no accept/reject filtering (unlike the `max_attempts` retry loop). For "give me a few takes, I'll pick one" workflows. Returns a list of `{"score": Score | None, "seed": int, "gen_count": int, "error": str | None, "truncated": bool}` dicts, one per candidate — `score` is `None` and `error` is set for a candidate that failed.
+
+### `SamplingSession.cancel_event`
+
+```python
+cancel_event: threading.Event | None
+```
+
+Set this (or assign an `Event` and `.set()` it from another thread) to stop an in-flight `run()`/`run_variations()` mid-decode — it raises `GenerationCancelled` carrying whatever was generated so far. Used by the HTTP server's `POST /generate/{request_id}/cancel`; see [HTTP Server — Cancellation](http.md#post-generaterequest_idcancel).
+
 ---
 
 ## Exceptions
@@ -236,3 +271,11 @@ from midigpt.inference import RequestValidationError
 ```
 
 Raised by `InferenceEngine.session()` when the request is structurally invalid — e.g. a bar index out of range, an unknown attribute name, a `model_dim` not in the checkpoint's map, or `mask_mode="token"` on an encoder that lacks `MaskBar`.
+
+### `GenerationCancelled`
+
+```python
+from midigpt.inference import GenerationCancelled
+```
+
+Raised by `SamplingSession.run()`/`run_variations()` when `cancel_event` is observed set mid-decode. Carries whatever was generated before the cancellation, decoded through the same path a natural completion would use: `exc.partial` is a `Score` (from `run()`) or the same list of per-candidate dicts `run_variations()` normally returns (from `run_variations()`); `exc.gen_count` is how many bars were generated before the cancel.

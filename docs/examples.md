@@ -14,11 +14,11 @@ Generated examples below are rendered as MP4 videos with synthesized audio and a
 ## 1. Controllable Track Sampling (Arrangement)
 Track sampling generates a completely new track conditioned on one or more existing tracks. The model can also **sample its own attribute controls** from the prior — letting it choose style freely — or you can pin specific values to steer the output.
 
-### Example 1: Rock/Pop Drums — *Californication*
-We take the guitar (`acoustic_guitar_steel`) and bass (`electric_bass_finger`) from RHCP's ***Californication*** as context and generate a drum track. By adjusting `note_density` (scale `0–9`), we steer the drums from a near-silent beat to a dense, active pattern.
+### Example 1: Rock/Pop Drums
+We take a guitar (`acoustic_guitar_steel`) and bass (`electric_bass_finger`) part as context and generate a drum track. By adjusting `note_density` (scale `0–9`), we steer the drums from a near-silent beat to a dense, active pattern.
 
 <div class="midi-example-card">
-  <strong>RHCP — Californication Guitar &amp; Bass Prompt (Context)</strong>
+  <strong>Guitar &amp; Bass Prompt (Context)</strong>
   <a href="/MIDI-GPT/assets/midi/prompt_californication.mid" class="midi-download-btn" download>
     Download Prompt MIDI
   </a>
@@ -107,11 +107,11 @@ We take the guitar (`acoustic_guitar_steel`) and bass (`electric_bass_finger`) f
 
 ---
 
-### Example 2: Classical Cello — Bach's *Harpsichord Concerto*
-We take the `violin`, `violin`, and `viola` tracks from J.S. Bach's ***Harpsichord Concerto in D Minor (BWV 1052)*** (solo section, bars 12–20) as context and generate a `cello` bassline restricted to monophonic (`max_polyphony = 0`). By sweeping `max_note_duration` from index `1` (16th notes) through index `4` (half notes) and adding a `min_note_duration = 4` (sustained legato) variant, we get 5 generations spanning the full duration spectrum.
+### Example 2: Classical Cello
+We take `violin`, `violin`, and `viola` tracks from a Baroque concerto's solo section as context and generate a `cello` bassline restricted to monophonic (`max_polyphony = 0`). By sweeping `max_note_duration` from index `1` (16th notes) through index `4` (half notes) and adding a `min_note_duration = 4` (sustained legato) variant, we get 5 generations spanning the full duration spectrum.
 
 <div class="midi-example-card">
-  <strong>J.S. Bach — BWV 1052 Strings Ensemble Prompt (Context)</strong>
+  <strong>Strings Ensemble Prompt (Context)</strong>
   <a href="/MIDI-GPT/assets/midi/prompt_bach.mid" class="midi-download-btn" download>
     Download Prompt MIDI
   </a>
@@ -261,13 +261,13 @@ We take the `violin`, `violin`, and `viola` tracks from J.S. Bach's ***Harpsicho
 
 ---
 
-### Example 3: Guitar Solo — *Black Magic Woman* (model-sampled controls)
-We take the `electric_bass_finger` and `drums` tracks from Santana's ***Black Magic Woman*** as context and resample the `overdriven_guitar` solo. No explicit attribute controls are set — the model samples its own controls from the prior, producing two stylistically distinct solos in the same harmonic context.
+### Example 3: Guitar Solo (model-sampled controls)
+We take `electric_bass_finger` and `drums` tracks from a Latin rock groove as context and resample the `overdriven_guitar` solo. No explicit attribute controls are set — the model samples its own controls from the prior, producing two stylistically distinct solos in the same harmonic context.
 
 > **Tip:** When you omit attribute controls, the model draws from its learned style distribution. This is useful for exploring diverse outputs without manually specifying constraints.
 
 <div class="midi-example-card">
-  <strong>Black Magic Woman — Original (Context)</strong>
+  <strong>Original (Context)</strong>
   <a href="/MIDI-GPT/assets/midi/prompt_bmw.mid" class="midi-download-btn" download>
     Download Original MIDI
   </a>
@@ -329,11 +329,11 @@ We take the `electric_bass_finger` and `drums` tracks from Santana's ***Black Ma
 ## 2. Controllable Bar Infilling (Inpainting)
 Bar infilling lets you select specific bars in any track and regenerate them while the model blends with the surrounding context.
 
-### Example 4: Orchestral Harp — *SSBM All Star Intro*
-We take the full harp, bells, and strings tracks from the ***Super Smash Bros. Melee All Star Intro*** and **delete bars 4–7 of the harp**, asking the model to infill them with a note-duration constraint. The `tubular_bells` and `string_ensemble_1` tracks play through all 8 bars as fixed context; the original harp bars 0–3 anchor the generation. The shaded region in the video marks the infilled bars.
+### Example 4: Orchestral Harp
+We take full harp, bells, and strings tracks from an orchestral intro and **delete bars 4–7 of the harp**, asking the model to infill them with a note-duration constraint. The `tubular_bells` and `string_ensemble_1` tracks play through all 8 bars as fixed context; the original harp bars 0–3 anchor the generation. The shaded region in the video marks the infilled bars.
 
 <div class="midi-example-card">
-  <strong>SSBM — Harp Infill Prompt (Bars 4–7 empty)</strong>
+  <strong>Harp Infill Prompt (Bars 4–7 empty)</strong>
   <a href="/MIDI-GPT/assets/midi/prompt_harp.mid" class="midi-download-btn" download>
     Download Seed MIDI
   </a>
@@ -402,7 +402,7 @@ We take the full harp, bells, and strings tracks from the ***Super Smash Bros. M
 ## 3. Multi-Step Composition
 By chaining multiple generation tasks you can build up a full arrangement incrementally.
 
-### Example 5: Multi-Step — Joe Hisaishi's *Summer*
+### Example 5: Multi-Step Composition
 Starting from a 3-track `acoustic_grand_piano` + `electric_bass_finger` + `synth_strings_1` context, we perform three successive generations to build a 5-track arrangement:
 
 1. **Continuation** — extend all three tracks from bar 4 to bar 7 autoregressively
@@ -412,7 +412,7 @@ Starting from a 3-track `acoustic_grand_piano` + `electric_bass_finger` + `synth
 The final video shows all five tracks simultaneously. Gold tracks (`acoustic_guitar_nylon`, `drums`) are the last two generation steps; the shaded region (bars 4–7) marks the continuation portion of the first three tracks.
 
 <div class="midi-example-card">
-  <strong>Joe Hisaishi — Summer (all 5 tracks, final state)</strong>
+  <strong>All 5 Tracks (Final State)</strong>
   <video class="midi-example-video" controls preload="metadata" src="/MIDI-GPT/assets/video/summer_final.mp4"></video>
   <a href="/MIDI-GPT/assets/midi/summer_final.mid" class="midi-download-btn" download>
     Download Final MIDI
