@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from midigpt.http.server import HttpServer
+from midigpt.http.server import HttpServer, ModelEntry
 from midigpt.inference.engine import InferenceEngine
 
 
@@ -18,7 +18,8 @@ def _engine(tiny_gpt2, ghost_tokenizer, ghost_analyzer) -> InferenceEngine:
 
 
 def _client(engine: InferenceEngine, label: str = "test-ckpt") -> TestClient:
-    server = HttpServer(engine, checkpoint_label=label)
+    entry = ModelEntry(id=label, engine=engine, label=label)
+    server = HttpServer({label: entry}, default_model=label)
     return TestClient(server.app)
 
 
@@ -43,7 +44,10 @@ def test_health(tiny_gpt2, ghost_tokenizer, ghost_analyzer):
     client = _client(_engine(tiny_gpt2, ghost_tokenizer, ghost_analyzer))
     r = client.get("/health")
     assert r.status_code == 200
-    assert r.json() == {"status": "ok"}
+    body = r.json()
+    assert body["status"] == "ok"
+    assert body["inflight"] == 0
+    assert body["max_queue"] == 64
 
 
 # --------------------------------------------------------------------------- #
