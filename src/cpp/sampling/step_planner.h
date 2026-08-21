@@ -14,9 +14,11 @@ public:
     std::vector<GenerationStep> plan() const;
 
 private:
+    enum class StepMode { Autoregressive, Infill, Humanize };
+
     void find_steps_inner(std::vector<GenerationStep>& steps,
                           std::vector<std::vector<bool>>& generated,
-                          bool autoregressive) const;
+                          StepMode mode) const;
 
     SelectionMask mask_;
     tokenizer::EncoderConfig config_;

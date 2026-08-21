@@ -80,6 +80,37 @@ class MidiGPTLightningModule(L.LightningModule):
     def validation_step(self, batch: dict, batch_idx: int) -> None:
         self._step(batch, "val")
 
+    def on_before_optimizer_step(self, optimizer: torch.optim.Optimizer) -> None:
+        # Fires after backward(), before gradient clipping -- the raw,
+        # pre-clip gradient norm. A spike here (vs. a merely-elevated
+        # post-clip step) is the signature of an outlier batch/gradient
+        # event, as opposed to sustained LR-driven instability.
+        from lightning.pytorch.utilities import grad_norm
+
+        norms = grad_norm(self.model, norm_type=2)
+        total = norms.get("grad_2.0_norm_total")
+        if total is not None:
+            self.log("train/grad_norm", total, on_step=True, prog_bar=False, sync_dist=True)
+
+    def configure_gradient_clipping(
+        self,
+        optimizer: torch.optim.Optimizer,
+        gradient_clip_val: int | float | None = None,
+        gradient_clip_algorithm: str | None = None,
+    ) -> None:
+        # Default clipping behavior, plus a post-clip norm log so the actual
+        # applied-update magnitude is directly observable alongside the
+        # pre-clip spikes logged in on_before_optimizer_step above.
+        self.clip_gradients(
+            optimizer, gradient_clip_val=gradient_clip_val, gradient_clip_algorithm=gradient_clip_algorithm
+        )
+        from lightning.pytorch.utilities import grad_norm
+
+        norms = grad_norm(self.model, norm_type=2)
+        total = norms.get("grad_2.0_norm_total")
+        if total is not None:
+            self.log("train/grad_norm_postclip", total, on_step=True, prog_bar=False, sync_dist=True)
+
     # ------------------------------------------------------------------ #
     #  Optimiser + scheduler
     # ------------------------------------------------------------------ #

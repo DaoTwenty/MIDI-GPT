@@ -125,6 +125,7 @@ def test_attribute_registry_contains_expected_keys():
         "tension",
         "tension_drum",
         "nomml",
+        "velocity_range",
     }
     assert set(ATTRIBUTE_REGISTRY.keys()) == expected
     # Every value is a BaseAttribute subclass

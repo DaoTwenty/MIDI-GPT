@@ -1,0 +1,302 @@
+{
+  "checkpoint": "/scratch/triana24/MIDI-GPT/runs/humanize_tiny_c-20260807-223944/model_final.safetensors",
+  "n_pieces": 150,
+  "gt_dispersion_ci": {
+    "mean": 6.412767253187912,
+    "ci95_lo": 6.158451678362278,
+    "ci95_hi": 6.669640016126403,
+    "n": 2400
+  },
+  "conditions": {
+    "bps=single|tau=0.7|top_p=1.0": {
+      "n_pieces": 150,
+      "degeneracy_rate": 0.19333333333333333,
+      "gt_degeneracy_rate": 0.10666666666666667,
+      "excess_degeneracy_rate": 0.08666666666666666,
+      "mean_vel_wasserstein": 5.266064221066558,
+      "mean_delta_wasserstein": 0.8540225527051968,
+      "mean_flat_vel_wasserstein": 18.99862992099513,
+      "mean_shuf_vel_wasserstein": 24.16683953116506,
+      "gen_dispersion_ci": {
+        "mean": 4.973437844805028,
+        "ci95_lo": 4.008344942709582,
+        "ci95_hi": 6.0204380498895365,
+        "n": 150
+      },
+      "overlaps_gt_dispersion": false,
+      "gate_G2_pass": false
+    },
+    "bps=single|tau=0.7|top_p=0.95": {
+      "n_pieces": 150,
+      "degeneracy_rate": 0.22,
+      "gt_degeneracy_rate": 0.10666666666666667,
+      "excess_degeneracy_rate": 0.11333333333333333,
+      "mean_vel_wasserstein": 5.436652369949283,
+      "mean_delta_wasserstein": 0.9391160822071344,
+      "mean_flat_vel_wasserstein": 18.99862992099513,
+      "mean_shuf_vel_wasserstein": 24.16683953116506,
+      "gen_dispersion_ci": {
+        "mean": 4.781915806266119,
+        "ci95_lo": 3.840981921035024,
+        "ci95_hi": 5.935459736370728,
+        "n": 150
+      },
+      "overlaps_gt_dispersion": false,
+      "gate_G2_pass": false
+    },
+    "bps=single|tau=0.85|top_p=1.0": {
+      "n_pieces": 150,
+      "degeneracy_rate": 0.15333333333333332,
+      "gt_degeneracy_rate": 0.10666666666666667,
+      "excess_degeneracy_rate": 0.04666666666666665,
+      "mean_vel_wasserstein": 5.25335298394173,
+      "mean_delta_wasserstein": 0.918906850146676,
+      "mean_flat_vel_wasserstein": 18.99862992099513,
+      "mean_shuf_vel_wasserstein": 24.16683953116506,
+      "gen_dispersion_ci": {
+        "mean": 5.257444556481271,
+        "ci95_lo": 4.322019079554141,
+        "ci95_hi": 6.305667635259869,
+        "n": 150
+      },
+      "overlaps_gt_dispersion": true,
+      "gate_G2_pass": true
+    },
+    "bps=single|tau=0.85|top_p=0.95": {
+      "n_pieces": 150,
+      "degeneracy_rate": 0.17333333333333334,
+      "gt_degeneracy_rate": 0.10666666666666667,
+      "excess_degeneracy_rate": 0.06666666666666667,
+      "mean_vel_wasserstein": 5.611393888084109,
+      "mean_delta_wasserstein": 0.918008948139433,
+      "mean_flat_vel_wasserstein": 18.99862992099513,
+      "mean_shuf_vel_wasserstein": 24.16683953116506,
+      "gen_dispersion_ci": {
+        "mean": 5.072767747498587,
+        "ci95_lo": 4.164071804173959,
+        "ci95_hi": 6.118608625597696,
+        "n": 150
+      },
+      "overlaps_gt_dispersion": false,
+      "gate_G2_pass": false
+    },
+    "bps=single|tau=1.0|top_p=1.0": {
+      "n_pieces": 150,
+      "degeneracy_rate": 0.14666666666666667,
+      "gt_degeneracy_rate": 0.10666666666666667,
+      "excess_degeneracy_rate": 0.039999999999999994,
+      "mean_vel_wasserstein": 5.760149848092185,
+      "mean_delta_wasserstein": 0.9280222955717287,
+      "mean_flat_vel_wasserstein": 18.99862992099513,
+      "mean_shuf_vel_wasserstein": 24.16683953116506,
+      "gen_dispersion_ci": {
+        "mean": 5.83816321216994,
+        "ci95_lo": 4.873311562510091,
+        "ci95_hi": 6.930165361250151,
+        "n": 150
+      },
+      "overlaps_gt_dispersion": true,
+      "gate_G2_pass": true
+    },
+    "bps=single|tau=1.0|top_p=0.95": {
+      "n_pieces": 150,
+      "degeneracy_rate": 0.14666666666666667,
+      "gt_degeneracy_rate": 0.10666666666666667,
+      "excess_degeneracy_rate": 0.039999999999999994,
+      "mean_vel_wasserstein": 5.476231878051737,
+      "mean_delta_wasserstein": 0.8918014079258045,
+      "mean_flat_vel_wasserstein": 18.99862992099513,
+      "mean_shuf_vel_wasserstein": 24.16683953116506,
+      "gen_dispersion_ci": {
+        "mean": 5.293459331496625,
+        "ci95_lo": 4.373771479930857,
+        "ci95_hi": 6.334255509876395,
+        "n": 150
+      },
+      "overlaps_gt_dispersion": true,
+      "gate_G2_pass": true
+    },
+    "bps=single|tau=1.15|top_p=1.0": {
+      "n_pieces": 150,
+      "degeneracy_rate": 0.08666666666666667,
+      "gt_degeneracy_rate": 0.10666666666666667,
+      "excess_degeneracy_rate": -0.020000000000000004,
+      "mean_vel_wasserstein": 7.782131632804287,
+      "mean_delta_wasserstein": 0.99654694084695,
+      "mean_flat_vel_wasserstein": 18.99862992099513,
+      "mean_shuf_vel_wasserstein": 24.16683953116506,
+      "gen_dispersion_ci": {
+        "mean": 7.2259021936720425,
+        "ci95_lo": 6.057894648106153,
+        "ci95_hi": 8.551087467395151,
+        "n": 150
+      },
+      "overlaps_gt_dispersion": true,
+      "gate_G2_pass": true
+    },
+    "bps=single|tau=1.15|top_p=0.95": {
+      "n_pieces": 150,
+      "degeneracy_rate": 0.12,
+      "gt_degeneracy_rate": 0.10666666666666667,
+      "excess_degeneracy_rate": 0.013333333333333322,
+      "mean_vel_wasserstein": 5.654803419539473,
+      "mean_delta_wasserstein": 0.9680735425532946,
+      "mean_flat_vel_wasserstein": 18.99862992099513,
+      "mean_shuf_vel_wasserstein": 24.16683953116506,
+      "gen_dispersion_ci": {
+        "mean": 5.578785859532365,
+        "ci95_lo": 4.661906353569315,
+        "ci95_hi": 6.65019729355298,
+        "n": 150
+      },
+      "overlaps_gt_dispersion": true,
+      "gate_G2_pass": true
+    },
+    "bps=full|tau=0.7|top_p=1.0": {
+      "n_pieces": 150,
+      "degeneracy_rate": 0.17333333333333334,
+      "gt_degeneracy_rate": 0.10666666666666667,
+      "excess_degeneracy_rate": 0.06666666666666667,
+      "mean_vel_wasserstein": 5.519937802432906,
+      "mean_delta_wasserstein": 0.9319100631991363,
+      "mean_flat_vel_wasserstein": 18.99862992099513,
+      "mean_shuf_vel_wasserstein": 24.16683953116506,
+      "gen_dispersion_ci": {
+        "mean": 4.885407976351712,
+        "ci95_lo": 4.0389024547223595,
+        "ci95_hi": 5.8393673888869255,
+        "n": 150
+      },
+      "overlaps_gt_dispersion": false,
+      "gate_G2_pass": false
+    },
+    "bps=full|tau=0.7|top_p=0.95": {
+      "n_pieces": 150,
+      "degeneracy_rate": 0.21333333333333335,
+      "gt_degeneracy_rate": 0.10666666666666667,
+      "excess_degeneracy_rate": 0.10666666666666667,
+      "mean_vel_wasserstein": 5.015574562644507,
+      "mean_delta_wasserstein": 0.9493324809571466,
+      "mean_flat_vel_wasserstein": 18.99862992099513,
+      "mean_shuf_vel_wasserstein": 24.16683953116506,
+      "gen_dispersion_ci": {
+        "mean": 4.522929287290468,
+        "ci95_lo": 3.7068362070838816,
+        "ci95_hi": 5.457909700492736,
+        "n": 150
+      },
+      "overlaps_gt_dispersion": false,
+      "gate_G2_pass": false
+    },
+    "bps=full|tau=0.85|top_p=1.0": {
+      "n_pieces": 150,
+      "degeneracy_rate": 0.17333333333333334,
+      "gt_degeneracy_rate": 0.10666666666666667,
+      "excess_degeneracy_rate": 0.06666666666666667,
+      "mean_vel_wasserstein": 6.287853442478783,
+      "mean_delta_wasserstein": 0.9246933542945404,
+      "mean_flat_vel_wasserstein": 18.99862992099513,
+      "mean_shuf_vel_wasserstein": 24.16683953116506,
+      "gen_dispersion_ci": {
+        "mean": 5.47780547619018,
+        "ci95_lo": 4.57759931273567,
+        "ci95_hi": 6.4979827355531175,
+        "n": 150
+      },
+      "overlaps_gt_dispersion": true,
+      "gate_G2_pass": false
+    },
+    "bps=full|tau=0.85|top_p=0.95": {
+      "n_pieces": 150,
+      "degeneracy_rate": 0.15333333333333332,
+      "gt_degeneracy_rate": 0.10666666666666667,
+      "excess_degeneracy_rate": 0.04666666666666665,
+      "mean_vel_wasserstein": 5.353642669363337,
+      "mean_delta_wasserstein": 0.9930346937260367,
+      "mean_flat_vel_wasserstein": 18.99862992099513,
+      "mean_shuf_vel_wasserstein": 24.16683953116506,
+      "gen_dispersion_ci": {
+        "mean": 4.81784041267079,
+        "ci95_lo": 3.9456801219684756,
+        "ci95_hi": 5.796704260093295,
+        "n": 150
+      },
+      "overlaps_gt_dispersion": false,
+      "gate_G2_pass": false
+    },
+    "bps=full|tau=1.0|top_p=1.0": {
+      "n_pieces": 150,
+      "degeneracy_rate": 0.10666666666666667,
+      "gt_degeneracy_rate": 0.10666666666666667,
+      "excess_degeneracy_rate": 0.0,
+      "mean_vel_wasserstein": 5.593928284555344,
+      "mean_delta_wasserstein": 1.0024403151125987,
+      "mean_flat_vel_wasserstein": 18.99862992099513,
+      "mean_shuf_vel_wasserstein": 24.16683953116506,
+      "gen_dispersion_ci": {
+        "mean": 6.376138329123115,
+        "ci95_lo": 5.370071767212498,
+        "ci95_hi": 7.541770494409059,
+        "n": 150
+      },
+      "overlaps_gt_dispersion": true,
+      "gate_G2_pass": true
+    },
+    "bps=full|tau=1.0|top_p=0.95": {
+      "n_pieces": 150,
+      "degeneracy_rate": 0.15333333333333332,
+      "gt_degeneracy_rate": 0.10666666666666667,
+      "excess_degeneracy_rate": 0.04666666666666665,
+      "mean_vel_wasserstein": 6.115057831141733,
+      "mean_delta_wasserstein": 0.9234495709238383,
+      "mean_flat_vel_wasserstein": 18.99862992099513,
+      "mean_shuf_vel_wasserstein": 24.16683953116506,
+      "gen_dispersion_ci": {
+        "mean": 4.998737768903586,
+        "ci95_lo": 4.082742760721563,
+        "ci95_hi": 6.04991054912154,
+        "n": 150
+      },
+      "overlaps_gt_dispersion": false,
+      "gate_G2_pass": false
+    },
+    "bps=full|tau=1.15|top_p=1.0": {
+      "n_pieces": 150,
+      "degeneracy_rate": 0.1,
+      "gt_degeneracy_rate": 0.10666666666666667,
+      "excess_degeneracy_rate": -0.006666666666666668,
+      "mean_vel_wasserstein": 6.863766258840857,
+      "mean_delta_wasserstein": 1.0398188230337397,
+      "mean_flat_vel_wasserstein": 18.99862992099513,
+      "mean_shuf_vel_wasserstein": 24.16683953116506,
+      "gen_dispersion_ci": {
+        "mean": 6.940785330644977,
+        "ci95_lo": 5.876097116349355,
+        "ci95_hi": 8.10600628582457,
+        "n": 150
+      },
+      "overlaps_gt_dispersion": true,
+      "gate_G2_pass": true
+    },
+    "bps=full|tau=1.15|top_p=0.95": {
+      "n_pieces": 150,
+      "degeneracy_rate": 0.10666666666666667,
+      "gt_degeneracy_rate": 0.10666666666666667,
+      "excess_degeneracy_rate": 0.0,
+      "mean_vel_wasserstein": 6.075737351875327,
+      "mean_delta_wasserstein": 0.9909763349440913,
+      "mean_flat_vel_wasserstein": 18.99862992099513,
+      "mean_shuf_vel_wasserstein": 24.16683953116506,
+      "gen_dispersion_ci": {
+        "mean": 5.877690713368072,
+        "ci95_lo": 4.958406822969711,
+        "ci95_hi": 6.919921676426251,
+        "n": 150
+      },
+      "overlaps_gt_dispersion": true,
+      "gate_G2_pass": true
+    }
+  },
+  "gate_G2_any_pass": true,
+  "gate_G2_first_passing_condition": "bps=single|tau=0.85|top_p=1.0"
+}

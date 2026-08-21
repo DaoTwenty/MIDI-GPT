@@ -1,0 +1,87 @@
+{
+  "checkpoint": "/scratch/triana24/MIDI-GPT/runs/humanize_tiny_e-20260807-223945/model_final.safetensors",
+  "n_pieces_scored": 5082,
+  "n_pieces_attempted": 5174,
+  "nll_by_token_type": {
+    "Delta": {
+      "model_true_context": 0.8451893437518759,
+      "model_flattened_context": 1.1404579159084636,
+      "model_swapped_context": 0.8783592624115418
+    },
+    "DeltaDirection": {
+      "model_true_context": 0.5439490555735367,
+      "model_flattened_context": 0.6635670848038021,
+      "model_swapped_context": 0.5809595285615397
+    },
+    "HumanizeEnd": {
+      "model_true_context": 0.22022638474924316,
+      "model_flattened_context": 0.2488192246264764,
+      "model_swapped_context": 0.2198533002959476
+    },
+    "VelocityLevel": {
+      "model_true_context": 2.7280537671463585,
+      "model_flattened_context": 3.7477512673967657,
+      "model_swapped_context": 4.565770137682953
+    }
+  },
+  "value_level_nll": {
+    "velocity": {
+      "marginal": 4.412328658388946,
+      "lag1_transition": 3.530064127896127
+    },
+    "delta": {
+      "marginal": 2.246154729748217,
+      "lag1_transition": 1.808671879248472
+    }
+  },
+  "accuracy_ladder": {
+    "velocity": {
+      "marginal_mode": 0.0264227088048428,
+      "lag1_transition": 0.22155264090747961,
+      "model_argmax_token_level": 0.3662172234987411
+    },
+    "delta_magnitude": {
+      "marginal_mode": 0.0,
+      "lag1_transition": 0.4175094390507012,
+      "model_argmax_token_level": 0.682621237298671,
+      "model_deltadirection_argmax_token_level": 0.8684538600902145,
+      "note": "scored only among notes where a Delta token was actually emitted (true signed delta != 0); does not cover whether the model correctly predicts 'no delta at all'."
+    }
+  },
+  "gate_G1a_beats_baselines": {
+    "Delta": {
+      "model_nll": 0.8451893437518759,
+      "uniform_nll": 3.373416192929818,
+      "beats_uniform": true,
+      "marginal_nll": 2.246154729748217,
+      "lag1_transition_nll": 1.808671879248472
+    },
+    "DeltaDirection": {
+      "model_nll": 0.5439490555735367,
+      "uniform_nll": 4.145761161005615,
+      "beats_uniform": true
+    },
+    "HumanizeEnd": {
+      "model_nll": 0.22022638474924316,
+      "uniform_nll": 0.37968640455116304,
+      "beats_uniform": true
+    },
+    "VelocityLevel": {
+      "model_nll": 2.7280537671463585,
+      "uniform_nll": 4.861945594370696,
+      "beats_uniform": true,
+      "marginal_nll": 4.412328658388946,
+      "lag1_transition_nll": 3.530064127896127
+    }
+  },
+  "gate_G1b_true_vs_swapped_context": {
+    "paired_nll_diff_swapped_minus_true": {
+      "mean": 0.813190593559561,
+      "ci95_lo": 0.7908849103687989,
+      "ci95_hi": 0.8357932372074383,
+      "n_pieces": 5082
+    },
+    "passes": true,
+    "interpretation": "positive mean with CI excluding zero => true context reduces NLL relative to swapped context => model is using context"
+  }
+}

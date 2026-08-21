@@ -24,6 +24,10 @@ public:
     // Autoregressive mode: forbid all FillIn-* tokens (multi-fill is off, model
     // must terminate via TrackEnd/PieceEnd once exact_bars_ is reached).
     void set_autoregressive_mode(bool is_ar) { is_autoregressive_ = is_ar; }
+    // Humanize: number of notes in the block about to be (or currently being)
+    // generated after the next HumanizeStart. Resets the per-block group
+    // counter. Must be set by the caller before decoding each Humanize block.
+    void set_humanize_note_count(int n) override { humanize_total_notes_ = n; humanize_groups_done_ = 0; }
 
 private:
     TokenType current_state_ = TokenType::PieceStart;
@@ -42,6 +46,10 @@ private:
     bool has_notes_in_block_ = false;
     bool require_notes_ = true;
     bool is_autoregressive_ = false;
+    bool in_humanize_ = false;          // inside the appendix HumanizeStart..HumanizeEnd block
+    bool in_humanize_skeleton_ = false; // inside an in-place HumanizeSkeletonStart..End bracket
+    int humanize_total_notes_ = 0;
+    int humanize_groups_done_ = 0;
 };
 
 } // namespace midigpt::masking

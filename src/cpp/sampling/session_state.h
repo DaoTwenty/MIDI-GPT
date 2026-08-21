@@ -54,6 +54,15 @@ private:
     std::vector<bool>  fillin_drum_order_;
     size_t             fillin_idx_ = 0;  // next index into fillin_drum_order_
 
+    // Ordered per-block note counts for Humanize blocks, matching the
+    // encoder's iteration over GenerationStep::bars_to_generate (std::set
+    // lexicographic order). Tells GrammarConstraint exactly how many
+    // Velocity/Delta groups to expect in the *current* HumanizeStart..End
+    // block (is_drum_ doesn't matter here — the appendix's VelocityLevel/
+    // DeltaDirection/Delta grammar is identical for drum and melodic notes).
+    std::vector<int>   humanize_note_counts_;
+    size_t             humanize_idx_ = 0;  // next index into humanize_note_counts_
+
     // For autoregressive mode: the agent track is moved to the last position
     // before encoding so its Track + Instrument tokens end the prompt. This
     // records the agent's original position so result() can restore the

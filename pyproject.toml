@@ -41,6 +41,7 @@ all       = ["midigpt[realtime,train]"]
 midigpt-server = "midigpt.osc.server:main"
 midigpt-listen = "midigpt.osc.listen:main"
 midigpt-http   = "midigpt.http.server:main"
+midigpt-humanize-http = "midigpt.http.humanize_server:main"
 
 [tool.pytest.ini_options]
 markers = [

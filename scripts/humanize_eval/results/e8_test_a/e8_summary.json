@@ -1,0 +1,60 @@
+{
+  "checkpoint": "/scratch/triana24/MIDI-GPT/runs/humanize_tiny-20260807-035822/model_final.safetensors",
+  "n_pieces": 200,
+  "scenarios": {
+    "whole_track": {
+      "n": 199,
+      "mean_vel_wasserstein": 10.54500167274012,
+      "mean_gen_stdev": 6.357468772781161,
+      "mean_gt_stdev": 6.5905634298544085,
+      "degeneracy_rate": 0.09547738693467336
+    },
+    "mechanical_ctx": {
+      "n": 199,
+      "mean_vel_wasserstein": 18.443522402038525,
+      "mean_gen_stdev": 4.554082385225579,
+      "mean_gt_stdev": 6.5905634298544085,
+      "degeneracy_rate": 0.4623115577889447
+    },
+    "mixed_ctx": {
+      "n": 199,
+      "mean_vel_wasserstein": 15.892572501371383,
+      "mean_gen_stdev": 5.116384973141163,
+      "mean_gt_stdev": 6.5905634298544085,
+      "degeneracy_rate": 0.3165829145728643
+    },
+    "vertical_slice": {
+      "n": 199,
+      "mean_vel_wasserstein": 5.442737254245737,
+      "mean_gen_stdev": 9.30941868486359,
+      "mean_gt_stdev": 10.121818569380515,
+      "degeneracy_rate": 0.05527638190954774
+    },
+    "whole_piece": {
+      "n": 199,
+      "mean_vel_wasserstein": 17.989348550216267,
+      "mean_gen_stdev": 9.48960135744556,
+      "mean_gt_stdev": 11.248599699129668,
+      "degeneracy_rate": 0.05527638190954774
+    }
+  },
+  "track_by_track": {
+    "n_sequences": 199,
+    "mean_wasserstein_by_step": {
+      "0": 17.404981091795207,
+      "1": 18.390905826514636,
+      "2": 16.436212543518554,
+      "3": 16.366078709610704,
+      "4": 17.48106015305183,
+      "5": 18.099666848838933
+    },
+    "degeneracy_rate_by_step": {
+      "0": 0.8040201005025126,
+      "1": 0.7185929648241206,
+      "2": 0.8359375,
+      "3": 0.8089887640449438,
+      "4": 0.8679245283018868,
+      "5": 0.88
+    }
+  }
+}

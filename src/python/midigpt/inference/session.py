@@ -925,6 +925,9 @@ class SamplingSession:
         vocab = self._engine._tokenizer._vocab
         log_probs: list[float] = []
         per_type: dict[str, list] = {}
+        n_legal_list: list[int] = []
+        argmax_correct: list[bool] = []
+        token_types: list[str] = []
 
         for i, tid in enumerate(token_ids):
             logit_pos = ctx_len - 1 + i
@@ -940,12 +943,15 @@ class SamplingSession:
             log_p_dist = torch.log_softmax(masked_logits, dim=-1)
             lp = float(log_p_dist[int(tid)].item())
             log_probs.append(lp)
+            n_legal_list.append(n_legal)
+            argmax_correct.append(bool(int(torch.argmax(masked_logits).item()) == int(tid)))
 
             try:
                 tt = vocab.get_type(int(tid)).name
             except Exception:
                 tt = "?"
             per_type.setdefault(tt, []).append(lp)
+            token_types.append(tt)
 
             try:
                 state.advance(int(tid))
@@ -956,6 +962,14 @@ class SamplingSession:
             "log_probs": log_probs,
             "total_logp": float(sum(log_probs)),
             "n_tokens": len(log_probs),
+            # Legal-token-set size per position (from the grammar mask, not the
+            # raw vocab size) -- lets a caller build a fair "uniform over what
+            # was actually allowed here" baseline as -log(n_legal) per position.
+            "n_legal": n_legal_list,
+            # Whether the model's own argmax matched the true token at each
+            # position -- a top-1 accuracy signal alongside the NLL.
+            "argmax_correct": argmax_correct,
+            "token_types": token_types,
             "per_type": {
                 k: {"mean": sum(v) / len(v), "sum": sum(v), "n": len(v)}
                 for k, v in per_type.items()
@@ -1177,6 +1191,7 @@ class SamplingSession:
         selected = [[False] * n_bars for _ in range(n_tracks)]
         autoregressive = [False] * n_tracks
         ignore = [False] * n_tracks
+        humanize = [False] * n_tracks
 
         for tp in self._request.tracks:
             if tp.id >= n_tracks:
@@ -1186,10 +1201,12 @@ class SamplingSession:
                     selected[tp.id][b] = True
             autoregressive[tp.id] = tp.autoregressive
             ignore[tp.id] = tp.ignore
+            humanize[tp.id] = tp.humanize
 
         mask.selected = selected
         mask.autoregressive = autoregressive
         mask.ignore = ignore
+        mask.humanize = humanize
         return mask
 
     def _build_constraints(self, step) -> _core.ConstraintGraph:

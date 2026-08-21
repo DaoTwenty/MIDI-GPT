@@ -83,6 +83,40 @@ enum class TokenType {
     // Track-level expressiveness control (NOMML median metric depth, 0-12).
     TrackLevelNomml = 88,
 
+    // Humanize scope markers: bracket an appendix block (after TrackEnd) that
+    // carries the real Velocity/Delta tokens for a bar/track whose note
+    // skeleton (pitch/onset/duration) was already emitted in place without
+    // them. Mirrors FillInStart/FillInEnd's placeholder-in-place +
+    // appendix-in-order pattern, but for expressive tokens instead of whole
+    // bars. Appended at the end of the enum (never insert mid-range) so
+    // existing checkpoints' token IDs never shift.
+    HumanizeStart = 89,
+    HumanizeEnd = 90,
+
+    // Piece-level flag (mirrors how PieceStart's domain signals "has infill
+    // blocks", but as its own token like UseVelocity/UseMicrotiming rather
+    // than bit-packed into PieceStart): 1 = this piece has one or more
+    // Humanize appendix blocks after TrackEnd, 0 = it doesn't.
+    HumanizeActive = 91,
+
+    // In-place skeleton brackets for a Humanize bar: the note skeleton
+    // (pitch/onset/duration) is emitted normally between these markers, with
+    // Velocity/Delta withheld there (they arrive later via the
+    // HumanizeStart/HumanizeEnd appendix block). Distinct token types from
+    // HumanizeStart/HumanizeEnd — which mark only the appendix — so the two
+    // roles are never ambiguous by token id alone, and no positional
+    // heuristics (e.g. "before/after the last TrackEnd") are needed to tell
+    // them apart in the grammar, session state, or decoder.
+    HumanizeSkeletonStart = 92,
+    HumanizeSkeletonEnd = 93,
+
+    // Bar-level dynamic-range-of-velocity attribute control (max - min
+    // velocity among the bar's notes). Python-defined attribute class
+    // (attributes/velocity.py); token_type/size are wired in dynamically via
+    // EncoderConfig::add_attribute_token_domains(), same as every other
+    // attribute control — this enum value only reserves the token id.
+    BarLevelVelocityRange = 94,
+
     // Aliases for refactor names if needed
     OnsetPolyphony = 42,    // Use MaxPolyphony as alias for OnsetPolyphony
     PitchRange = 49,

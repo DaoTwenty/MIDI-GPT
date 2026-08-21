@@ -70,6 +70,23 @@ class TestValidateTrainConfig:
         cfg = TrainConfig(infill_probability=0.0, mask_apply_probability=0.0)
         _validate_train_config(cfg, json.loads(ghost_config_json))
 
+    def test_humanize_rejected_without_support(self, ghost_config_json):
+        from midigpt.training.trainer import TrainConfig, _validate_train_config
+
+        cfg = TrainConfig(infill_probability=0.0, humanize_probability=0.5)
+        enc = json.loads(ghost_config_json)
+        enc["supports_humanize"] = False
+        with pytest.raises(ValueError, match="supports_humanize"):
+            _validate_train_config(cfg, enc)
+
+    def test_no_humanize_passes(self, ghost_config_json):
+        from midigpt.training.trainer import TrainConfig, _validate_train_config
+
+        cfg = TrainConfig(
+            infill_probability=0.0, humanize_probability=0.0, mask_apply_probability=0.0
+        )
+        _validate_train_config(cfg, json.loads(ghost_config_json))
+
 
 # --------------------------------------------------------------------------- #
 #  LightningModule — forward/backward, no parquet needed
@@ -171,6 +188,159 @@ class TestMidiGPTDataset:
         dl = dm.train_dataloader()
         batch = next(iter(dl))
         assert "input_ids" in batch
+
+
+@pytest.mark.slow
+@pytest.mark.inference
+class TestHumanizeDataset:
+    """MidiGPTDataset's Humanize path, exercised against the real
+    models/humanize_encoder.json (supports_infill=false, supports_humanize=true)
+    and real MIDI-derived training data (training_parquet fixture)."""
+
+    @pytest.fixture
+    def humanize_tokenizer(self):
+        from midigpt.attributes.base import AttributeAnalyzer
+        from midigpt.tokenizer.tokenizer import Tokenizer
+
+        repo_root = pathlib.Path(__file__).resolve().parents[2]
+        enc_json = (repo_root / "models" / "humanize_encoder.json").read_text()
+        cfg = _core.EncoderConfig.from_json(enc_json)
+        analyzer = AttributeAnalyzer.from_config(cfg)
+        return Tokenizer(cfg, analyzer)
+
+    def test_humanize_dataset_emits_humanize_tokens(self, humanize_tokenizer, training_parquet):
+        from midigpt.training.dataset import MidiGPTDataset
+
+        ds = MidiGPTDataset(
+            str(training_parquet),
+            humanize_tokenizer,
+            infill_probability=0.0,
+            humanize_probability=1.0,
+            humanize_bar_fraction=0.5,
+            mask_bar_config=None,
+            max_seq_len=1024,
+            max_tracks=4,
+            min_tracks=1,
+            min_fill_ratio=0.5,
+        )
+        assert len(ds) > 0
+
+        vocab = humanize_tokenizer._vocab
+        hs = vocab.encode_val(_core.TokenType.HumanizeStart, 0)
+        sks = vocab.encode_val(_core.TokenType.HumanizeSkeletonStart, 0)
+        found = False
+        for i in range(min(30, len(ds))):
+            sample = ds[i]
+            if sample is None:
+                continue
+            ids = sample["input_ids"]
+            if hs in ids and sks in ids:
+                found = True
+                break
+        assert found, "No sample among the first 30 contained Humanize tokens"
+
+    def test_style_ref_mask_only_flags_expressive_tokens_before_appendix(
+        self, humanize_tokenizer, training_parquet
+    ):
+        """style_ref_mask (style-conditioning prototype scaffolding) must only
+        ever flag VelocityLevel/DeltaDirection/Delta positions, and only
+        within a track's in-place skeleton region (never a Humanize appendix
+        block — reference bars are, by construction, disjoint from whatever
+        was withheld as the humanize target, so their expressive tokens are
+        never deferred). Each track has its own TrackEnd, so "appendix zone"
+        means "after this track's TrackEnd, before the next Track token" —
+        not a single global cutoff."""
+        from midigpt.training.dataset import MidiGPTDataset
+
+        ds = MidiGPTDataset(
+            str(training_parquet),
+            humanize_tokenizer,
+            infill_probability=0.0,
+            humanize_probability=1.0,
+            humanize_bar_fraction=0.5,
+            mask_bar_config=None,
+            max_seq_len=1024,
+            max_tracks=4,
+            min_tracks=1,
+            min_fill_ratio=0.5,
+        )
+        vocab = humanize_tokenizer._vocab
+        expressive = (
+            _core.TokenType.VelocityLevel,
+            _core.TokenType.DeltaDirection,
+            _core.TokenType.Delta,
+        )
+
+        saw_any_mask = False
+        for i in range(min(30, len(ds))):
+            sample = ds[i]
+            ids, mask = sample["input_ids"], sample["style_ref_mask"]
+            assert len(ids) == len(mask)
+            in_appendix = False
+            for j, tok in enumerate(ids):
+                tt = vocab.get_type(tok)
+                if tt == _core.TokenType.Track:
+                    in_appendix = False
+                elif tt == _core.TokenType.TrackEnd:
+                    in_appendix = True
+                if not mask[j]:
+                    continue
+                saw_any_mask = True
+                assert tt in expressive, (
+                    f"style_ref_mask flagged a non-expressive token at position {j}"
+                )
+                assert not in_appendix, (
+                    "style_ref_mask flagged a token at/after its track's TrackEnd "
+                    "(appendix content, never in-place skeleton)"
+                )
+        assert saw_any_mask, "No sample among the first 30 had a non-empty style_ref_mask"
+
+    def test_style_pretrain_mode_returns_two_expressive_only_views(
+        self, humanize_tokenizer, training_parquet
+    ):
+        from midigpt.training.dataset import MidiGPTDataset
+
+        ds = MidiGPTDataset(
+            str(training_parquet),
+            humanize_tokenizer,
+            infill_probability=0.0,
+            humanize_probability=0.0,
+            mask_bar_config=None,
+            max_seq_len=512,
+            max_tracks=4,
+            min_tracks=1,
+            min_fill_ratio=0.5,
+            style_pretrain_mode=True,
+        )
+        vocab = humanize_tokenizer._vocab
+        expressive = (
+            _core.TokenType.VelocityLevel,
+            _core.TokenType.DeltaDirection,
+            _core.TokenType.Delta,
+        )
+        for i in range(min(5, len(ds))):
+            sample = ds[i]
+            for key in ("anchor", "positive"):
+                ids, mask = sample[f"{key}_ids"], sample[f"{key}_mask"]
+                assert len(ids) == len(mask)
+                # The mask must exactly equal "is this an expressive token" —
+                # style_pretrain_mode has no target/reference split, the
+                # whole window is the segment.
+                for j, tok in enumerate(ids):
+                    assert mask[j] == (vocab.get_type(tok) in expressive)
+
+    def test_humanize_rejected_without_encoder_support(self, ghost_tokenizer, training_parquet):
+        from midigpt.training.dataset import MidiGPTDataset
+
+        with pytest.raises(ValueError, match="supports_humanize"):
+            MidiGPTDataset(
+                str(training_parquet),
+                ghost_tokenizer,
+                infill_probability=0.0,
+                humanize_probability=0.5,
+                mask_bar_config=None,
+                max_seq_len=128,
+            )
 
 
 @pytest.mark.slow

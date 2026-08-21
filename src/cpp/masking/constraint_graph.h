@@ -17,6 +17,11 @@ public:
     // of the given drumness (see Constraint::set_fillin_drum).
     void set_fillin_drum(bool is_drum);
 
+    // Notify all constraints how many notes' worth of Velocity/Delta groups
+    // the current Humanize appendix block must contain (see
+    // Constraint::set_humanize_note_count).
+    void set_humanize_note_count(int n);
+
     // Returns a full boolean mask where true = masked (disallowed)
     std::vector<bool> get_mask(const tokenizer::Vocabulary& vocab) const;
 

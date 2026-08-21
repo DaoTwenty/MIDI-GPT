@@ -93,12 +93,26 @@ public:
             throw std::runtime_error("VelocityQuantizer requires at least 2 levels");
         }
         // Pre-compute the decode table: the second MIDI velocity in each bin.
-        // Matches original enums::DEFAULT_VELOCITY_MAP inverse exactly.
+        // Matches original enums::DEFAULT_VELOCITY_MAP inverse exactly for any
+        // num_levels small enough that every bin holds >= 2 raw velocities
+        // (true for the original 32-level config: 128/32 = 4 per bin).
         decode_table_.assign(num_levels_, 0);
         std::vector<int> count(num_levels_, 0);
+        std::vector<int> last_v(num_levels_, -1);
         for (int v = 1; v < 128; ++v) {
             int level = encode(v);
+            last_v[level] = v;
             if (++count[level] == 2) decode_table_[level] = v;
+        }
+        // Fallback for bins that never reach a second member -- only
+        // possible once num_levels is large enough that some bins hold at
+        // most one raw velocity (e.g. num_levels=128, ~1 per bin). Without
+        // this, decode_table_ silently stays at its zero-initialized
+        // default for nearly every level and decode() always returns 0.
+        for (int level = 0; level < num_levels_; ++level) {
+            if (count[level] > 0 && count[level] < 2) {
+                decode_table_[level] = last_v[level];
+            }
         }
     }
 

@@ -10,6 +10,10 @@ struct GenerationStep {
     int start_bar;                                // window start (global bar index)
     int end_bar;                                  // window end (exclusive, global bar index)
     bool is_autoregressive = true;                // true = AR, false = infill
+    // Humanize: only meaningful when is_autoregressive == false. Marks this
+    // step's bars_to_generate as Humanize appendix blocks (deferred Velocity/
+    // Delta) rather than FillIn blocks (deferred whole-bar content).
+    bool is_humanize = false;
     std::vector<int>                          track_indices;    // global track indices in window
     std::set<std::pair<int,int>>              bars_to_generate; // (global_track, global_bar)
     std::vector<std::tuple<int,int,int,int>>  bar_mapping;      // (local_track, local_bar, global_track, global_bar)

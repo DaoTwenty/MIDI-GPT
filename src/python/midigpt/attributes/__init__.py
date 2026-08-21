@@ -13,6 +13,7 @@ from midigpt.attributes.quantile import (
 )
 from midigpt.attributes.silence import SilenceProportion
 from midigpt.attributes.tension import Tension, TensionDrum
+from midigpt.attributes.velocity import VelocityRange
 
 # Name → class registry used by AttributeAnalyzer.from_config().
 # Encoder configs reference these names in the "attribute_controls" list.
@@ -30,6 +31,7 @@ ATTRIBUTE_REGISTRY = {
     "tension": Tension,
     "tension_drum": TensionDrum,
     "nomml": Nomml,
+    "velocity_range": VelocityRange,
 }
 
 # TokenType (name) → (registry_key, params) used by AttributeAnalyzer
@@ -63,6 +65,7 @@ TOKEN_TYPE_TO_ATTRIBUTE = {
     "Tension": ("tension", {}),
     "TensionDrum": ("tension_drum", {}),
     "TrackLevelNomml": ("nomml", {}),
+    "BarLevelVelocityRange": ("velocity_range", {}),
     # SilenceProportionBar, MinNoteDurationBar, MaxNoteDurationBar, PitchClassSetTrack:
     # no C++ token type yet — supported as Python classes for future models but not
     # auto-inferred from checkpoints until corresponding C++ entries are added.
@@ -87,4 +90,5 @@ __all__ = [
     "SilenceProportion",
     "Tension",
     "TensionDrum",
+    "VelocityRange",
 ]

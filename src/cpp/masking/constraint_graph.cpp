@@ -20,6 +20,12 @@ void ConstraintGraph::set_fillin_drum(bool is_drum) {
     }
 }
 
+void ConstraintGraph::set_humanize_note_count(int n) {
+    for (auto& constraint : constraints_) {
+        constraint->set_humanize_note_count(n);
+    }
+}
+
 std::vector<bool> ConstraintGraph::get_mask(const tokenizer::Vocabulary& vocab) const {
     std::vector<bool> mask(vocab.size(), false);
     for (const auto& constraint : constraints_) {

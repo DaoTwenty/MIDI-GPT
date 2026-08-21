@@ -39,6 +39,22 @@ void GrammarConstraint::step(int token, const tokenizer::Vocabulary& vocab) {
         case TokenType::FillInEnd:
             in_infill_ = false;
             break;
+        case TokenType::HumanizeStart:
+            in_humanize_ = true;
+            humanize_groups_done_ = 0;
+            break;
+        case TokenType::HumanizeEnd:
+            in_humanize_ = false;
+            break;
+        case TokenType::HumanizeSkeletonStart:
+            in_humanize_skeleton_ = true;
+            break;
+        case TokenType::HumanizeSkeletonEnd:
+            in_humanize_skeleton_ = false;
+            break;
+        case TokenType::VelocityLevel:
+            if (in_humanize_) humanize_groups_done_++;
+            break;
         case TokenType::NoteOnset:
         case TokenType::NotePitch:
             has_notes_in_block_ = true;
@@ -129,6 +145,7 @@ void GrammarConstraint::apply(std::vector<bool>& mask, const tokenizer::Vocabula
             allow(TokenType::TimeSig);
             allow(TokenType::Tension);
             allow(TokenType::PitchClassSet);
+            allow(TokenType::BarLevelVelocityRange);
             allow(TokenType::MaskBar);
             allow(TokenType::TimeAbsolutePos);
             // Encoder skips TimeAbsolutePos when onset==0, so allow direct
@@ -140,11 +157,13 @@ void GrammarConstraint::apply(std::vector<bool>& mask, const tokenizer::Vocabula
             allow(TokenType::Delta);
             if (!require_notes_ || has_notes_in_block_) allow(TokenType::BarEnd);
             allow(TokenType::FillInPlaceholder);
+            allow(TokenType::HumanizeSkeletonStart);
             break;
 
         case TokenType::TimeSig:
             allow(TokenType::Tension);
             allow(TokenType::PitchClassSet);
+            allow(TokenType::BarLevelVelocityRange);
             allow(TokenType::MaskBar);
             allow(TokenType::TimeAbsolutePos);
             allow(TokenType::VelocityLevel);
@@ -154,12 +173,15 @@ void GrammarConstraint::apply(std::vector<bool>& mask, const tokenizer::Vocabula
             allow(TokenType::Delta);
             if (!require_notes_ || has_notes_in_block_) allow(TokenType::BarEnd);
             allow(TokenType::FillInPlaceholder);
+            allow(TokenType::HumanizeSkeletonStart);
             break;
 
         case TokenType::Tension:
         case TokenType::PitchClassSet:
+        case TokenType::BarLevelVelocityRange:
             allow(TokenType::Tension);
             allow(TokenType::PitchClassSet);
+            allow(TokenType::BarLevelVelocityRange);
             allow(TokenType::MaskBar);
             allow(TokenType::TimeAbsolutePos);
             allow(TokenType::VelocityLevel);
@@ -168,6 +190,7 @@ void GrammarConstraint::apply(std::vector<bool>& mask, const tokenizer::Vocabula
             allow(TokenType::DeltaDirection);
             allow(TokenType::Delta);
             if (!require_notes_ || has_notes_in_block_) allow(TokenType::BarEnd);
+            allow(TokenType::HumanizeSkeletonStart);
             break;
 
         case TokenType::MaskBar:
@@ -195,25 +218,46 @@ void GrammarConstraint::apply(std::vector<bool>& mask, const tokenizer::Vocabula
             break;
 
         case TokenType::TimeAbsolutePos:
-            // After time position: velocity may change, or carry from previous
-            // VelocityLevel — orig allows TimeAbsolutePos -> NoteOnset directly.
-            allow(TokenType::VelocityLevel);
-            allow(TokenType::NoteOnset);
-            allow(TokenType::NotePitch);
-            allow(TokenType::DeltaDirection);
-            allow(TokenType::Delta);
-            if (in_infill_) {
-                if (!require_notes_ || has_notes_in_block_) allow(TokenType::FillInEnd);
+            if (in_humanize_skeleton_) {
+                // Skeleton notes carry no Velocity/Delta — those are withheld
+                // and arrive later via the appendix.
+                allow(TokenType::NoteOnset);
+                allow(TokenType::NotePitch);
+                if (!require_notes_ || has_notes_in_block_) allow(TokenType::HumanizeSkeletonEnd);
             } else {
-                if (!require_notes_ || has_notes_in_block_) allow(TokenType::BarEnd);
+                // After time position: velocity may change, or carry from previous
+                // VelocityLevel — orig allows TimeAbsolutePos -> NoteOnset directly.
+                allow(TokenType::VelocityLevel);
+                allow(TokenType::NoteOnset);
+                allow(TokenType::NotePitch);
+                allow(TokenType::DeltaDirection);
+                allow(TokenType::Delta);
+                if (in_infill_) {
+                    if (!require_notes_ || has_notes_in_block_) allow(TokenType::FillInEnd);
+                } else {
+                    if (!require_notes_ || has_notes_in_block_) allow(TokenType::BarEnd);
+                }
             }
             break;
 
         case TokenType::VelocityLevel:
-            // orig: VelocityLevel -> {NoteOnset, Delta}
-            allow(TokenType::NoteOnset);
-            allow(TokenType::NotePitch);
-            allow(TokenType::Delta);
+            if (in_humanize_) {
+                // Humanize per-note group: VelocityLevel [DeltaDirection] [Delta],
+                // then either the next note's VelocityLevel or, once every
+                // fixed note has a group, HumanizeEnd.
+                allow(TokenType::DeltaDirection);
+                allow(TokenType::Delta);
+                if (humanize_groups_done_ < humanize_total_notes_) {
+                    allow(TokenType::VelocityLevel);
+                } else {
+                    allow(TokenType::HumanizeEnd);
+                }
+            } else {
+                // orig: VelocityLevel -> {NoteOnset, Delta}
+                allow(TokenType::NoteOnset);
+                allow(TokenType::NotePitch);
+                allow(TokenType::Delta);
+            }
             break;
 
         case TokenType::DeltaDirection:
@@ -221,13 +265,21 @@ void GrammarConstraint::apply(std::vector<bool>& mask, const tokenizer::Vocabula
             break;
 
         case TokenType::Delta:
-            // orig: Delta -> {Delta, DeltaDirection, NoteOnset, FillInEnd}
-            allow(TokenType::Delta);
-            allow(TokenType::DeltaDirection);
-            allow(TokenType::NoteOnset);
-            allow(TokenType::NotePitch);
-            if (in_infill_) {
-                if (!require_notes_ || has_notes_in_block_) allow(TokenType::FillInEnd);
+            if (in_humanize_) {
+                if (humanize_groups_done_ < humanize_total_notes_) {
+                    allow(TokenType::VelocityLevel);
+                } else {
+                    allow(TokenType::HumanizeEnd);
+                }
+            } else {
+                // orig: Delta -> {Delta, DeltaDirection, NoteOnset, FillInEnd}
+                allow(TokenType::Delta);
+                allow(TokenType::DeltaDirection);
+                allow(TokenType::NoteOnset);
+                allow(TokenType::NotePitch);
+                if (in_infill_) {
+                    if (!require_notes_ || has_notes_in_block_) allow(TokenType::FillInEnd);
+                }
             }
             break;
 
@@ -235,6 +287,38 @@ void GrammarConstraint::apply(std::vector<bool>& mask, const tokenizer::Vocabula
         case TokenType::NotePitch:
             if (is_drum_) {
                 // Drums: no duration token, go to next note or end
+                if (in_humanize_skeleton_) {
+                    allow(TokenType::NoteOnset);
+                    allow(TokenType::NotePitch);
+                    allow(TokenType::TimeAbsolutePos);
+                    allow(TokenType::HumanizeSkeletonEnd);
+                } else {
+                    allow(TokenType::VelocityLevel);
+                    allow(TokenType::NoteOnset);
+                    allow(TokenType::NotePitch);
+                    allow(TokenType::TimeAbsolutePos);
+                    allow(TokenType::DeltaDirection);
+                    allow(TokenType::Delta);
+                    if (in_infill_) {
+                        allow(TokenType::FillInEnd);
+                    } else {
+                        allow(TokenType::BarEnd);
+                    }
+                }
+            } else {
+                // Melodic: must have duration next
+                allow(TokenType::NoteDuration);
+            }
+            break;
+
+        case TokenType::NoteDuration:
+            // After duration: another note (same onset), new time, or end
+            if (in_humanize_skeleton_) {
+                allow(TokenType::NoteOnset);
+                allow(TokenType::NotePitch);
+                allow(TokenType::TimeAbsolutePos);
+                allow(TokenType::HumanizeSkeletonEnd);
+            } else {
                 allow(TokenType::VelocityLevel);
                 allow(TokenType::NoteOnset);
                 allow(TokenType::NotePitch);
@@ -246,24 +330,6 @@ void GrammarConstraint::apply(std::vector<bool>& mask, const tokenizer::Vocabula
                 } else {
                     allow(TokenType::BarEnd);
                 }
-            } else {
-                // Melodic: must have duration next
-                allow(TokenType::NoteDuration);
-            }
-            break;
-
-        case TokenType::NoteDuration:
-            // After duration: another note (same onset), new time, or end
-            allow(TokenType::VelocityLevel);
-            allow(TokenType::NoteOnset);
-            allow(TokenType::NotePitch);
-            allow(TokenType::TimeAbsolutePos);
-            allow(TokenType::DeltaDirection);
-            allow(TokenType::Delta);
-            if (in_infill_) {
-                allow(TokenType::FillInEnd);
-            } else {
-                allow(TokenType::BarEnd);
             }
             break;
 
@@ -289,7 +355,38 @@ void GrammarConstraint::apply(std::vector<bool>& mask, const tokenizer::Vocabula
         case TokenType::FillInEnd:
             allow(TokenType::BarEnd);
             allow(TokenType::FillInStart);
+            allow(TokenType::HumanizeStart);
             allow(TokenType::PieceEnd);
+            break;
+
+        case TokenType::HumanizeStart:
+            // Mirrors FillInStart, but the appendix here only ever carries
+            // expressive tokens (no TimeAbsolutePos/NoteOnset/NoteDuration) —
+            // each group starts with VelocityLevel. An empty block (0 notes)
+            // goes straight to HumanizeEnd.
+            if (humanize_total_notes_ > 0) {
+                allow(TokenType::VelocityLevel);
+            } else {
+                allow(TokenType::HumanizeEnd);
+            }
+            break;
+
+        case TokenType::HumanizeEnd:
+            allow(TokenType::HumanizeStart);
+            allow(TokenType::PieceEnd);
+            break;
+
+        case TokenType::HumanizeSkeletonStart:
+            // In-place skeleton: pitch/onset/duration only, no Velocity/Delta
+            // (those are withheld and arrive later via the appendix).
+            allow(TokenType::TimeAbsolutePos);
+            allow(TokenType::NoteOnset);
+            allow(TokenType::NotePitch);
+            if (!require_notes_ || has_notes_in_block_) allow(TokenType::HumanizeSkeletonEnd);
+            break;
+
+        case TokenType::HumanizeSkeletonEnd:
+            allow(TokenType::BarEnd);
             break;
 
         default:
@@ -312,12 +409,15 @@ void GrammarConstraint::apply(std::vector<bool>& mask, const tokenizer::Vocabula
         }
     }
 
-    // Autoregressive mode: forbid every FillIn-* token everywhere. The
-    // encoder turns off multi-fill in AR mode (no FillInPlaceholder in the
-    // prompt), so the model has no business emitting FillInStart/FillInEnd.
+    // Autoregressive mode: forbid every FillIn-*/Humanize-* token everywhere.
+    // The encoder turns off multi-fill/multi-humanize in AR mode (no
+    // FillInPlaceholder and no withheld velocity/delta in the prompt), so the
+    // model has no business emitting these appendix-block markers.
     if (is_autoregressive_) {
         for (TokenType t : {TokenType::FillInStart, TokenType::FillInEnd,
-                            TokenType::FillInPlaceholder}) {
+                            TokenType::FillInPlaceholder,
+                            TokenType::HumanizeStart, TokenType::HumanizeEnd,
+                            TokenType::HumanizeSkeletonStart, TokenType::HumanizeSkeletonEnd}) {
             auto [s, e] = vocab.range(t);
             if (s != -1) for (int i = s; i < e; ++i) mask[i] = true;
         }

@@ -161,6 +161,40 @@ SessionState::SessionState(
             }
         }
 
+    } else if (step_.is_humanize) {
+        // --- Humanize step: deferred Velocity/Delta appendix encoding ---
+        // The encoder emits the note skeleton (pitch/onset/duration) normally
+        // in place for bars in multi_humanize, bracketed by
+        // HumanizeSkeletonStart/End, then appends HumanizeStart/content/
+        // HumanizeEnd blocks carrying the withheld Velocity/Delta tokens.
+        for (const auto& [tr, br] : step_.bars_to_generate) {
+            encode_opts.multi_humanize.insert({tr, br});
+        }
+        // Per-block note counts, matching the encoder's iteration over
+        // encode_opts.multi_humanize (std::set lexicographic order) — tells
+        // GrammarConstraint exactly how many notes' worth of groups to expect
+        // in each HumanizeStart..End block.
+        humanize_note_counts_.clear();
+        for (const auto& [tr, br] : encode_opts.multi_humanize) {
+            int n = (tr >= 0 && tr < static_cast<int>(context_.tracks.size())
+                     && br >= 0 && br < static_cast<int>(context_.tracks[tr].bars.size()))
+                    ? static_cast<int>(context_.tracks[tr].bars[br].note_indices.size())
+                    : 0;
+            humanize_note_counts_.push_back(n);
+        }
+
+        // Apply bar masking for non-context bars (same as infill)
+        for (int ti = 0; ti < static_cast<int>(context_.tracks.size()); ++ti) {
+            for (int bi = step_.start_bar; bi < step_.end_bar && bi < static_cast<int>(context_.tracks[ti].bars.size()); ++bi) {
+                bool is_context = (ti < static_cast<int>(step_.context.size())
+                                   && bi < static_cast<int>(step_.context[ti].size())
+                                   && step_.context[ti][bi]);
+                bool is_gen = step_.bars_to_generate.count({ti, bi}) > 0;
+                if (!is_context && !is_gen) {
+                    context_.tracks[ti].bars[bi].future = true;
+                }
+            }
+        }
     } else {
         // --- Infill step: multi-fill encoding ---
         // The encoder will emit FILL_IN_PLACEHOLDER for bars in multi_fill,
@@ -228,6 +262,21 @@ SessionState::SessionState(
             if (!pop_if(TokenType::Bar))     break;
         }
         pop_if(TokenType::BarEnd);
+    } else if (step_.is_humanize) {
+        // For humanize: truncate at the first HUMANIZE_START token
+        // The model generates Velocity/Delta appendix blocks from this point
+        int humanize_start_token = -1;
+        if (vocab_.has(TokenType::HumanizeStart)) {
+            humanize_start_token = vocab_.encode(TokenType::HumanizeStart, 0);
+        }
+        if (humanize_start_token >= 0) {
+            for (size_t idx = 0; idx < context_cache_.size(); ++idx) {
+                if (context_cache_[idx] == humanize_start_token) {
+                    context_cache_.resize(idx + 1); // keep the HUMANIZE_START token
+                    break;
+                }
+            }
+        }
     } else {
         // For infill: truncate at the first FILL_IN_START token
         // The model generates fill blocks from this point
@@ -268,9 +317,17 @@ SessionState::SessionState(
     // (Autoregressive doesn't need this — the agent's Track token is the last
     // Track token in the prompt after the reorder above, so GrammarConstraint's
     // is_drum_ is naturally correct.)
-    if (!step_.is_autoregressive && !fillin_drum_order_.empty()) {
+    if (!step_.is_autoregressive && !step_.is_humanize && !fillin_drum_order_.empty()) {
         fillin_idx_ = 0;
         constraints_.set_fillin_drum(fillin_drum_order_[0]);
+    }
+
+    // For humanize: context_cache_ ends with the first HumanizeStart token, so
+    // we're about to sample tokens for block 0. Tell the grammar exactly how
+    // many notes' worth of Velocity/Delta groups that block must contain.
+    if (step_.is_humanize && !humanize_note_counts_.empty()) {
+        humanize_idx_ = 0;
+        constraints_.set_humanize_note_count(humanize_note_counts_[0]);
     }
 }
 
@@ -279,6 +336,15 @@ bool SessionState::complete() const {
     if (step_.is_autoregressive) {
         return vocab_.is_type(generated_.back(), TokenType::TrackEnd)
             || vocab_.is_type(generated_.back(), TokenType::PieceEnd);
+    } else if (step_.is_humanize) {
+        // Humanize: complete when we've seen all HUMANIZE_END tokens
+        int humanize_end_count = 0;
+        for (int tok : generated_) {
+            if (vocab_.is_type(tok, TokenType::HumanizeEnd)) {
+                humanize_end_count++;
+            }
+        }
+        return humanize_end_count >= static_cast<int>(step_.bars_to_generate.size());
     } else {
         // Infill: complete when we've seen all FILL_IN_END tokens
         int fill_end_count = 0;
@@ -319,6 +385,18 @@ void SessionState::advance(int token) {
         fillin_idx_++;
         if (fillin_idx_ < fillin_drum_order_.size()) {
             constraints_.set_fillin_drum(fillin_drum_order_[fillin_idx_]);
+        }
+    }
+
+    // When a new HumanizeStart is generated, advance to the next block's note
+    // count so the grammar enforces the correct number of Velocity/Delta
+    // groups for it.
+    if (step_.is_humanize
+        && vocab_.is_type(token, TokenType::HumanizeStart)
+        && !humanize_note_counts_.empty()) {
+        humanize_idx_++;
+        if (humanize_idx_ < humanize_note_counts_.size()) {
+            constraints_.set_humanize_note_count(humanize_note_counts_[humanize_idx_]);
         }
     }
 }

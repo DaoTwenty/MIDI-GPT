@@ -17,6 +17,7 @@
 #include "../../src/cpp/tokenizer/decoder.h"
 #include "../../src/cpp/tokenizer/encoder_config.h"
 #include "../../src/cpp/tokenizer/vocabulary.h"
+#include "../../src/cpp/tokenizer/domain_transforms.h"
 #include "../../src/cpp/core/score.h"
 
 #include <algorithm>
@@ -29,7 +30,8 @@ namespace {
 
 // Standard structural vocab used by most cases.
 EncoderConfig std_config(bool with_velocity = true, bool with_duration = true,
-                         bool with_delta = false, bool with_fillin = false) {
+                         bool with_delta = false, bool with_fillin = false,
+                         bool with_humanize = false) {
     EncoderConfig cfg;
     cfg.resolution = 480;
     cfg.velocity_levels = 32;
@@ -54,6 +56,13 @@ EncoderConfig std_config(bool with_velocity = true, bool with_duration = true,
         push(TT::FillInPlaceholder, 1);
         push(TT::FillInStart, 1);
         push(TT::FillInEnd, 1);
+    }
+    if (with_humanize) {
+        push(TT::HumanizeActive, 2);
+        push(TT::HumanizeSkeletonStart, 1);
+        push(TT::HumanizeSkeletonEnd, 1);
+        push(TT::HumanizeStart, 1);
+        push(TT::HumanizeEnd, 1);
     }
     return cfg;
 }
@@ -492,4 +501,154 @@ TEST_CASE("Encoder/Decoder: track-level nomml attribute roundtrip") {
     Score back = dec.decode(tokens);
     REQUIRE(back.tracks.size() == 1);
     CHECK(back.tracks[0].attributes.at("nomml") == 12);
+}
+
+// ---------------------------------------------------------------------------
+// multi_humanize: in-place HumanizeSkeletonStart/End bracket + deferred
+// HumanizeStart/End Velocity/Delta appendix block
+// ---------------------------------------------------------------------------
+
+namespace {
+
+Score three_note_bar() {
+    Score s; s.resolution = 480;
+    int pitches[3] = {60, 64, 67};
+    // Kept within std_config()'s TimeAbsolutePos domain (192 raw ticks) —
+    // onset is encoded as raw ticks, not scaled by bar length.
+    int onsets[3]  = {0, 48, 96};
+    for (int i = 0; i < 3; ++i) {
+        Note n; n.pitch = pitches[i]; n.velocity = 64;
+        n.onset_ticks = onsets[i]; n.duration_ticks = 60;
+        s.notes.push_back(n);
+    }
+    Track t; t.instrument = 0; t.type = TrackType::Melodic;
+    Bar b; b.ts_numerator = 4; b.ts_denominator = 4;
+    b.note_indices = {0, 1, 2};
+    t.bars.push_back(b);
+    s.tracks.push_back(t);
+    return s;
+}
+
+}  // namespace
+
+TEST_CASE("Encoder multi_humanize: skeleton keeps pitch/onset in place, no Velocity there; "
+          "appendix carries exactly one VelocityLevel group per note") {
+    auto cfg = std_config(/*vel*/ true, /*dur*/ true, /*delta*/ false,
+                          /*fillin*/ false, /*humanize*/ true);
+    cfg.supports_humanize = true;
+    Vocabulary vocab(cfg);
+    Encoder enc(vocab);
+
+    Score s = three_note_bar();
+    EncodeOptions opt;
+    opt.multi_humanize = {{0, 0}};
+    auto tokens = enc.encode(s, opt);
+
+    CHECK(count_type(tokens, vocab, TT::HumanizeSkeletonStart) == 1);
+    CHECK(count_type(tokens, vocab, TT::HumanizeSkeletonEnd) == 1);
+    CHECK(count_type(tokens, vocab, TT::HumanizeStart) == 1);
+    CHECK(count_type(tokens, vocab, TT::HumanizeEnd) == 1);
+    // All 3 notes' pitch/onset are still emitted in place (the skeleton).
+    CHECK(count_type(tokens, vocab, TT::NoteOnset) == 3);
+    // Velocity is withheld from the skeleton and appears only in the
+    // appendix — exactly one VelocityLevel per note.
+    CHECK(count_type(tokens, vocab, TT::VelocityLevel) == 3);
+
+    // No VelocityLevel token appears between HumanizeSkeletonStart/End.
+    int sks = vocab.encode(TT::HumanizeSkeletonStart, 0);
+    int ske = vocab.encode(TT::HumanizeSkeletonEnd, 0);
+    auto [vs, ve] = vocab.range(TT::VelocityLevel);
+    bool in_skeleton = false;
+    int vel_in_skeleton = 0;
+    for (int tok : tokens) {
+        if (tok == sks) in_skeleton = true;
+        else if (tok == ske) in_skeleton = false;
+        else if (in_skeleton && tok >= vs && tok < ve) vel_in_skeleton++;
+    }
+    CHECK(vel_in_skeleton == 0);
+}
+
+TEST_CASE("Decoder resolve_humanize: splices appendix Velocity onto the matching "
+          "skeleton note in order, preserving pitch/onset/duration") {
+    auto cfg = std_config(/*vel*/ true, /*dur*/ true, /*delta*/ false,
+                          /*fillin*/ false, /*humanize*/ true);
+    cfg.supports_humanize = true;
+    Vocabulary vocab(cfg);
+    Encoder enc(vocab);
+    Decoder dec(vocab);
+
+    Score s = three_note_bar();
+    EncodeOptions opt;
+    opt.multi_humanize = {{0, 0}};
+    auto tokens = enc.encode(s, opt);
+
+    // Simulate the model regenerating the appendix with NEW velocity values —
+    // distinct from whatever the original encode happened to produce — to
+    // prove the decoder actually splices from the appendix rather than
+    // leaking the original velocity through some other path (the skeleton
+    // carries no velocity at all, so this also exercises the "no velocity
+    // token" fallback path if splicing were silently skipped).
+    int new_levels[3] = {5, 15, 25};
+    auto [vs, ve] = vocab.range(TT::VelocityLevel);
+    int hs = vocab.encode(TT::HumanizeStart, 0);
+    int he = vocab.encode(TT::HumanizeEnd, 0);
+    bool in_appendix = false;
+    int note_i = 0;
+    for (auto& tok : tokens) {
+        if (tok == hs) { in_appendix = true; continue; }
+        if (tok == he) { in_appendix = false; continue; }
+        if (in_appendix && tok >= vs && tok < ve) {
+            REQUIRE(note_i < 3);
+            tok = vocab.encode(TT::VelocityLevel, new_levels[note_i]);
+            note_i++;
+        }
+    }
+    REQUIRE(note_i == 3);
+
+    Score back = dec.decode(tokens);
+    REQUIRE(back.notes.size() == 3);
+
+    VelocityQuantizer vq(32);
+    CHECK(back.notes[0].pitch == 60);
+    CHECK(back.notes[1].pitch == 64);
+    CHECK(back.notes[2].pitch == 67);
+    CHECK(back.notes[0].onset_ticks == 0);
+    CHECK(back.notes[1].onset_ticks == 48);
+    CHECK(back.notes[2].onset_ticks == 96);
+    CHECK(back.notes[0].duration_ticks == 60);
+    CHECK(back.notes[1].duration_ticks == 60);
+    CHECK(back.notes[2].duration_ticks == 60);
+    CHECK(back.notes[0].velocity == vq.decode(new_levels[0]));
+    CHECK(back.notes[1].velocity == vq.decode(new_levels[1]));
+    CHECK(back.notes[2].velocity == vq.decode(new_levels[2]));
+}
+
+TEST_CASE("Decoder resolve_humanize: an empty (0-note) humanize block round-trips cleanly") {
+    auto cfg = std_config(/*vel*/ true, /*dur*/ true, /*delta*/ false,
+                          /*fillin*/ false, /*humanize*/ true);
+    cfg.supports_humanize = true;
+    Vocabulary vocab(cfg);
+    Encoder enc(vocab);
+    Decoder dec(vocab);
+
+    // A bar with no notes has nothing to humanize: HumanizeStart should go
+    // straight to HumanizeEnd, and decode should not crash.
+    Score s; s.resolution = 480;
+    Track t; t.instrument = 0; t.type = TrackType::Melodic;
+    Bar b; b.ts_numerator = 4; b.ts_denominator = 4; // no note_indices
+    t.bars.push_back(b);
+    s.tracks.push_back(t);
+
+    EncodeOptions opt;
+    opt.multi_humanize = {{0, 0}};
+    auto tokens = enc.encode(s, opt);
+
+    CHECK(count_type(tokens, vocab, TT::HumanizeStart) == 1);
+    CHECK(count_type(tokens, vocab, TT::HumanizeEnd) == 1);
+    CHECK(count_type(tokens, vocab, TT::VelocityLevel) == 0);
+
+    REQUIRE_NOTHROW(dec.decode(tokens));
+    Score back = dec.decode(tokens);
+    REQUIRE(back.tracks.size() == 1);
+    CHECK(back.tracks[0].bars[0].note_indices.empty());
 }

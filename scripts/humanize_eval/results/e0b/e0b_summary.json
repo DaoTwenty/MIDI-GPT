@@ -1,0 +1,222 @@
+{
+  "n_pieces": 4815,
+  "native_tpq_distribution": {
+    "480": 4815
+  },
+  "mode2_band": [
+    8,
+    12
+  ],
+  "n_pieces_mode2_heavy": 934,
+  "mode2_heavy_frac_of_corpus": 0.19397715472481827,
+  "mode2_heavy_band_stdev": {
+    "mean": 0.6956861222436913,
+    "median": 0.6841638000260613
+  },
+  "mode2_heavy_swing_gap_upbeat_minus_downbeat_mean_delta": {
+    "mean": 0.06054167936368882,
+    "median": 0.0,
+    "n": 78
+  },
+  "mode2_heavy_top_genres": [
+    [
+      "unknown",
+      710
+    ],
+    [
+      "pop",
+      65
+    ],
+    [
+      "italian%2cfrench%2cspanish",
+      30
+    ],
+    [
+      "rock",
+      13
+    ],
+    [
+      "country",
+      7
+    ],
+    [
+      "hits of the 1990s",
+      7
+    ],
+    [
+      "hits of the 1980s",
+      7
+    ],
+    [
+      "instrumental",
+      6
+    ],
+    [
+      "hits of the 1970s",
+      5
+    ],
+    [
+      "hits of the 2000s",
+      5
+    ],
+    [
+      "hits of 2011 2020",
+      4
+    ],
+    [
+      "musical%2cfilm%2ctv",
+      4
+    ],
+    [
+      "hits of the 1980s,midi karaoke",
+      4
+    ],
+    [
+      "pop,rock",
+      3
+    ],
+    [
+      "pop,rnb-soul",
+      3
+    ]
+  ],
+  "all_pieces_top_genres": [
+    [
+      "unknown",
+      2911
+    ],
+    [
+      "renaissance",
+      446
+    ],
+    [
+      "pop",
+      249
+    ],
+    [
+      "baroque",
+      238
+    ],
+    [
+      "italian%2cfrench%2cspanish",
+      139
+    ],
+    [
+      "romantic",
+      117
+    ],
+    [
+      "classical",
+      85
+    ],
+    [
+      "modern",
+      62
+    ],
+    [
+      "rock",
+      61
+    ],
+    [
+      "hits of the 2000s",
+      27
+    ],
+    [
+      "hits of the 1990s",
+      26
+    ],
+    [
+      "instrumental",
+      26
+    ],
+    [
+      "country",
+      25
+    ],
+    [
+      "traditional",
+      20
+    ],
+    [
+      "medley",
+      18
+    ]
+  ],
+  "mode2_heavy_genre_share_vs_corpus_share": {
+    "unknown": {
+      "mode2_heavy_count": 710,
+      "mode2_heavy_pct": 76.02,
+      "corpus_pct": 60.46
+    },
+    "pop": {
+      "mode2_heavy_count": 65,
+      "mode2_heavy_pct": 6.96,
+      "corpus_pct": 5.17
+    },
+    "italian%2cfrench%2cspanish": {
+      "mode2_heavy_count": 30,
+      "mode2_heavy_pct": 3.21,
+      "corpus_pct": 2.89
+    },
+    "rock": {
+      "mode2_heavy_count": 13,
+      "mode2_heavy_pct": 1.39,
+      "corpus_pct": 1.27
+    },
+    "country": {
+      "mode2_heavy_count": 7,
+      "mode2_heavy_pct": 0.75,
+      "corpus_pct": 0.52
+    },
+    "hits of the 1990s": {
+      "mode2_heavy_count": 7,
+      "mode2_heavy_pct": 0.75,
+      "corpus_pct": 0.54
+    },
+    "hits of the 1980s": {
+      "mode2_heavy_count": 7,
+      "mode2_heavy_pct": 0.75,
+      "corpus_pct": 0.35
+    },
+    "instrumental": {
+      "mode2_heavy_count": 6,
+      "mode2_heavy_pct": 0.64,
+      "corpus_pct": 0.54
+    },
+    "hits of the 1970s": {
+      "mode2_heavy_count": 5,
+      "mode2_heavy_pct": 0.54,
+      "corpus_pct": 0.33
+    },
+    "hits of the 2000s": {
+      "mode2_heavy_count": 5,
+      "mode2_heavy_pct": 0.54,
+      "corpus_pct": 0.56
+    },
+    "hits of 2011 2020": {
+      "mode2_heavy_count": 4,
+      "mode2_heavy_pct": 0.43,
+      "corpus_pct": 0.19
+    },
+    "musical%2cfilm%2ctv": {
+      "mode2_heavy_count": 4,
+      "mode2_heavy_pct": 0.43,
+      "corpus_pct": 0.17
+    },
+    "hits of the 1980s,midi karaoke": {
+      "mode2_heavy_count": 4,
+      "mode2_heavy_pct": 0.43,
+      "corpus_pct": 0.17
+    },
+    "pop,rock": {
+      "mode2_heavy_count": 3,
+      "mode2_heavy_pct": 0.32,
+      "corpus_pct": 0.27
+    },
+    "pop,rnb-soul": {
+      "mode2_heavy_count": 3,
+      "mode2_heavy_pct": 0.32,
+      "corpus_pct": 0.08
+    }
+  }
+}

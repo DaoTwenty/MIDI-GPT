@@ -28,6 +28,7 @@ struct EncoderConfig {
     // Capability flags
     bool emit_delta_tokens       = false; // emit Delta / DeltaDirection (microtiming via Δ tokens)
     bool supports_infill         = false; // model can do FILL_IN_* tokens
+    bool supports_humanize       = false; // model can do HUMANIZE_* tokens
     bool supports_mask_bar_token = false; // vocab includes MaskBar token
     bool velocity_sticky         = true;  // emit VELOCITY only when it changes (else per-note)
     // Switchable modes: model was trained to handle both on and off.

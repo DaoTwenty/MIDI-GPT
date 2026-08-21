@@ -22,6 +22,15 @@ struct EncodeOptions {
     // Non-empty requires EncoderConfig::supports_infill == true.
     std::set<std::pair<int,int>> multi_fill;
 
+    // Humanize: set of (track_index, bar_index) pairs whose note skeleton
+    // (pitch/onset/duration) is emitted normally in place, but whose
+    // Velocity/Delta tokens are withheld there and instead appended — in
+    // note order — as HUMANIZE_START ... HUMANIZE_END blocks after TrackEnd.
+    // Unlike multi_fill, the bar's notes are NOT hidden — only their
+    // expressive (velocity/microtiming) tokens are deferred.
+    // Non-empty requires EncoderConfig::supports_humanize == true.
+    std::set<std::pair<int,int>> multi_humanize;
+
     // Window size (bars) for this encode call — emitted as the NumBars token.
     // 0 means "not set"; the encoder falls back to EncoderConfig::model_dim.
     // Validation that this matches num_bars_map happens at the request layer.

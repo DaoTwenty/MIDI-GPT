@@ -143,7 +143,13 @@ PYBIND11_MODULE(_core, m) {
       .value("PieceEnd", TokenType::PieceEnd)
       .value("UseVelocity", TokenType::UseVelocity)
       .value("UseMicrotiming", TokenType::UseMicrotiming)
-      .value("TrackLevelNomml", TokenType::TrackLevelNomml);
+      .value("TrackLevelNomml", TokenType::TrackLevelNomml)
+      .value("HumanizeStart", TokenType::HumanizeStart)
+      .value("HumanizeEnd", TokenType::HumanizeEnd)
+      .value("HumanizeActive", TokenType::HumanizeActive)
+      .value("HumanizeSkeletonStart", TokenType::HumanizeSkeletonStart)
+      .value("HumanizeSkeletonEnd", TokenType::HumanizeSkeletonEnd)
+      .value("BarLevelVelocityRange", TokenType::BarLevelVelocityRange);
 
   py::enum_<TrackType>(m, "TrackType")
       .value("Melodic", TrackType::Melodic)
@@ -214,6 +220,7 @@ PYBIND11_MODULE(_core, m) {
       .def_readwrite("model_dim",                &EncoderConfig::model_dim)
       .def_readwrite("emit_delta_tokens",        &EncoderConfig::emit_delta_tokens)
       .def_readwrite("supports_infill",          &EncoderConfig::supports_infill)
+      .def_readwrite("supports_humanize",        &EncoderConfig::supports_humanize)
       .def_readwrite("supports_mask_bar_token",  &EncoderConfig::supports_mask_bar_token)
       .def_readwrite("velocity_sticky",          &EncoderConfig::velocity_sticky)
       .def_readwrite("pitch_min",                &EncoderConfig::pitch_min)
@@ -236,6 +243,7 @@ PYBIND11_MODULE(_core, m) {
       .def_readwrite("partial_encode_track_bars",
                      &EncodeOptions::partial_encode_track_bars)
       .def_readwrite("multi_fill", &EncodeOptions::multi_fill)
+      .def_readwrite("multi_humanize", &EncodeOptions::multi_humanize)
       .def_readwrite("window_bars", &EncodeOptions::window_bars)
       .def_readwrite("use_span_masks", &EncodeOptions::use_span_masks)
       .def_readwrite("remove_future_bars", &EncodeOptions::remove_future_bars)
@@ -307,6 +315,8 @@ PYBIND11_MODULE(_core, m) {
       .def(py::init<>())
       .def("add_constraint", &ConstraintGraph::add_constraint)
       .def("get_mask", &ConstraintGraph::get_mask)
+      .def("set_fillin_drum", &ConstraintGraph::set_fillin_drum)
+      .def("set_humanize_note_count", &ConstraintGraph::set_humanize_note_count)
       .def("step", &ConstraintGraph::step);
 
   // sampling
@@ -314,13 +324,15 @@ PYBIND11_MODULE(_core, m) {
       .def(py::init<>())
       .def_readwrite("selected", &SelectionMask::selected)
       .def_readwrite("autoregressive", &SelectionMask::autoregressive)
-      .def_readwrite("ignore", &SelectionMask::ignore);
+      .def_readwrite("ignore", &SelectionMask::ignore)
+      .def_readwrite("humanize", &SelectionMask::humanize);
 
   py::class_<GenerationStep>(m, "GenerationStep")
       .def(py::init<>())
       .def_readwrite("start_bar", &GenerationStep::start_bar)
       .def_readwrite("end_bar", &GenerationStep::end_bar)
       .def_readwrite("is_autoregressive", &GenerationStep::is_autoregressive)
+      .def_readwrite("is_humanize", &GenerationStep::is_humanize)
       .def_readwrite("track_indices", &GenerationStep::track_indices)
       .def_readwrite("bars_to_generate", &GenerationStep::bars_to_generate)
       .def_readwrite("bar_mapping", &GenerationStep::bar_mapping)

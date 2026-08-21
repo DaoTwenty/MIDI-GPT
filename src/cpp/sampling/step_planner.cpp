@@ -19,38 +19,50 @@ std::vector<GenerationStep> StepPlanner::plan() const {
     std::vector<std::vector<bool>> generated(nt, std::vector<bool>(nb, false));
 
     // First pass: autoregressive steps (tracks with autoregressive=true)
-    find_steps_inner(steps, generated, true);
+    find_steps_inner(steps, generated, StepMode::Autoregressive);
     // Second pass: infill steps (tracks with autoregressive=false)
-    find_steps_inner(steps, generated, false);
+    find_steps_inner(steps, generated, StepMode::Infill);
+    // Third pass: humanize steps (tracks with humanize=true)
+    find_steps_inner(steps, generated, StepMode::Humanize);
     return steps;
 }
 
 void StepPlanner::find_steps_inner(std::vector<GenerationStep>& steps,
                                     std::vector<std::vector<bool>>& generated,
-                                    bool autoregressive) const {
+                                    StepMode mode) const {
     int nt = static_cast<int>(mask_.selected.size());
     if (nt == 0) return;
     int nb = static_cast<int>(mask_.selected[0].size());
     int model_dim = config_.model_dim;
     int bps = std::clamp(bars_per_step_, 1, model_dim);
     int tps = std::clamp(tracks_per_step_, 1, nt);
+    bool autoregressive = (mode == StepMode::Autoregressive);
 
-    // Build effective selection: selected & (autoregressive XOR infill)
-    // For AR:    sel = selected & autoregressive_mask
-    // For infill: sel = selected & ~autoregressive_mask
+    // Build effective selection: selected & mode-matching tracks.
+    // A track is Humanize if humanize[i] is set — this takes priority over
+    // the AR/infill split, so AR and Infill passes both exclude it.
+    // For AR:       sel = selected & autoregressive_mask & ~humanize_mask
+    // For Infill:   sel = selected & ~autoregressive_mask & ~humanize_mask
+    // For Humanize: sel = selected & humanize_mask
     std::vector<std::vector<bool>> sel(nt, std::vector<bool>(nb, false));
     for (int i = 0; i < nt; ++i) {
         bool is_ar = (i < static_cast<int>(mask_.autoregressive.size()) && mask_.autoregressive[i]);
+        bool is_humanize = (i < static_cast<int>(mask_.humanize.size()) && mask_.humanize[i]);
         bool is_ignored = (i < static_cast<int>(mask_.ignore.size()) && mask_.ignore[i]);
         if (is_ignored) continue;
-        bool include = autoregressive ? is_ar : !is_ar;
+        bool include;
+        switch (mode) {
+            case StepMode::Autoregressive: include = is_ar && !is_humanize; break;
+            case StepMode::Infill:         include = !is_ar && !is_humanize; break;
+            case StepMode::Humanize:       include = is_humanize; break;
+        }
         if (!include) continue;
         for (int j = 0; j < nb; ++j) {
             sel[i][j] = mask_.selected[i][j];
         }
     }
 
-    // Context amount: AR gets all context before, infill centers
+    // Context amount: AR gets all context before, infill/humanize center
     int num_context = autoregressive ? model_dim - bps : (model_dim - bps) / 2;
 
     // Iterate in (tracks_per_step, bars_per_step) grid
@@ -161,6 +173,7 @@ void StepPlanner::find_steps_inner(std::vector<GenerationStep>& steps,
                 gs.start_bar = t;
                 gs.end_bar = std::min(window_end, nb);
                 gs.is_autoregressive = autoregressive;
+                gs.is_humanize = (mode == StepMode::Humanize);
                 gs.context = ctx;
 
                 // Collect track indices (tracks that have step or context in window)

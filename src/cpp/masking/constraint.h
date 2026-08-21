@@ -21,6 +21,11 @@ public:
     // so it can require NoteDuration after NoteOnset for melodic tracks even when
     // the most recent Track token in the prompt context was a drum track.
     virtual void set_fillin_drum(bool /*is_drum*/) {}
+
+    // Optional: notify the constraint how many notes' worth of Velocity/Delta
+    // groups the current/next Humanize appendix block must contain. Default
+    // no-op; overridden by GrammarConstraint (see set_humanize_note_count).
+    virtual void set_humanize_note_count(int /*n*/) {}
 };
 
 } // namespace midigpt::masking

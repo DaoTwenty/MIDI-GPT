@@ -56,6 +56,11 @@ EncoderConfig full_config() {
     push(TT::FillInStart, 1);
     push(TT::FillInEnd, 1);
     push(TT::FillInPlaceholder, 1);
+    push(TT::HumanizeStart, 1);
+    push(TT::HumanizeEnd, 1);
+    push(TT::HumanizeActive, 2);
+    push(TT::HumanizeSkeletonStart, 1);
+    push(TT::HumanizeSkeletonEnd, 1);
     push(TT::Delta, 64);
     push(TT::DeltaDirection, 2);
     push(TT::NoteDensity, 8);
@@ -331,6 +336,176 @@ TEST_CASE("Grammar infill: NoteOnset reachable directly after FillInStart (onset
     // FillInEnd must still be blocked (require_notes_ guards this downstream,
     // and FillInStart itself never allows it directly).
     CHECK(all_masked(m, vocab.range(TT::FillInEnd)));
+}
+
+TEST_CASE("Grammar AR mode: Humanize-* always masked across reachable states") {
+    auto cfg = full_config();
+    Vocabulary vocab(cfg);
+    auto g = std::make_shared<GrammarConstraint>();
+    g->set_autoregressive_mode(true);
+
+    ConstraintGraph graph; graph.add_constraint(g);
+    auto check = [&]() {
+        auto m = graph.get_mask(vocab);
+        CHECK(all_masked(m, vocab.range(TT::HumanizeStart)));
+        CHECK(all_masked(m, vocab.range(TT::HumanizeEnd)));
+        CHECK(all_masked(m, vocab.range(TT::HumanizeSkeletonStart)));
+        CHECK(all_masked(m, vocab.range(TT::HumanizeSkeletonEnd)));
+    };
+    check();
+    graph.step(vocab.encode(TT::Track, 0), vocab); check();
+    graph.step(vocab.encode(TT::Bar, 0), vocab);   check();
+    graph.step(vocab.encode(TT::TimeAbsolutePos, 0), vocab); check();
+    graph.step(vocab.encode(TT::NoteOnset, 60), vocab); check();
+}
+
+// ---------------------------------------------------------------------------
+// Humanize appendix: exact per-note VelocityLevel/[DeltaDirection]/[Delta]
+// group-count enforcement via set_humanize_note_count
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Grammar humanize: HumanizeStart with note_count=0 only allows HumanizeEnd") {
+    auto cfg = full_config();
+    Vocabulary vocab(cfg);
+    auto g = std::make_shared<GrammarConstraint>();
+    ConstraintGraph graph; graph.add_constraint(g);
+
+    graph.step(vocab.encode(TT::HumanizeStart, 0), vocab);
+    g->set_humanize_note_count(0);
+    auto m = graph.get_mask(vocab);
+    CHECK(none_masked(m, vocab.range(TT::HumanizeEnd)));
+    CHECK(all_masked(m, vocab.range(TT::VelocityLevel)));
+}
+
+TEST_CASE("Grammar humanize: HumanizeStart with note_count>0 allows VelocityLevel, blocks HumanizeEnd") {
+    auto cfg = full_config();
+    Vocabulary vocab(cfg);
+    auto g = std::make_shared<GrammarConstraint>();
+    ConstraintGraph graph; graph.add_constraint(g);
+
+    graph.step(vocab.encode(TT::HumanizeStart, 0), vocab);
+    g->set_humanize_note_count(2);
+    auto m = graph.get_mask(vocab);
+    CHECK(none_masked(m, vocab.range(TT::VelocityLevel)));
+    CHECK(all_masked(m, vocab.range(TT::HumanizeEnd)));
+}
+
+TEST_CASE("Grammar humanize: exact note-count enforced — HumanizeEnd blocked until "
+          "every note's group is done, then VelocityLevel is blocked instead") {
+    auto cfg = full_config();
+    Vocabulary vocab(cfg);
+    auto g = std::make_shared<GrammarConstraint>();
+    ConstraintGraph graph; graph.add_constraint(g);
+
+    graph.step(vocab.encode(TT::HumanizeStart, 0), vocab);
+    g->set_humanize_note_count(2);
+
+    // Note 1: VelocityLevel [+ optional DeltaDirection/Delta]
+    graph.step(vocab.encode(TT::VelocityLevel, 5), vocab);
+    auto m1 = graph.get_mask(vocab);
+    CHECK(none_masked(m1, vocab.range(TT::VelocityLevel)));  // note 2 may start
+    CHECK(all_masked(m1, vocab.range(TT::HumanizeEnd)));     // not done yet
+
+    graph.step(vocab.encode(TT::DeltaDirection, 0), vocab);
+    graph.step(vocab.encode(TT::Delta, 3), vocab);
+
+    // Note 2: VelocityLevel — this is the 2nd (last) group.
+    graph.step(vocab.encode(TT::VelocityLevel, 10), vocab);
+    auto m2 = graph.get_mask(vocab);
+    CHECK(all_masked(m2, vocab.range(TT::VelocityLevel)));   // no 3rd note expected
+    CHECK(none_masked(m2, vocab.range(TT::HumanizeEnd)));    // exactly 2 groups done
+}
+
+TEST_CASE("Grammar humanize: HumanizeEnd allows next HumanizeStart or PieceEnd") {
+    auto cfg = full_config();
+    Vocabulary vocab(cfg);
+    auto g = std::make_shared<GrammarConstraint>();
+    ConstraintGraph graph; graph.add_constraint(g);
+
+    graph.step(vocab.encode(TT::HumanizeStart, 0), vocab);
+    g->set_humanize_note_count(0);
+    graph.step(vocab.encode(TT::HumanizeEnd, 0), vocab);
+    auto m = graph.get_mask(vocab);
+    CHECK(none_masked(m, vocab.range(TT::HumanizeStart)));
+    CHECK(none_masked(m, vocab.range(TT::PieceEnd)));
+}
+
+// ---------------------------------------------------------------------------
+// Humanize in-place skeleton bracket: pitch/onset/duration only, no
+// Velocity/Delta (those are withheld and arrive later via the appendix)
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Grammar humanize skeleton: HumanizeSkeletonStart allows pitch/onset "
+          "tokens, blocks Velocity/Delta and (empty-block) SkeletonEnd") {
+    auto cfg = full_config();
+    Vocabulary vocab(cfg);
+    auto g = std::make_shared<GrammarConstraint>();  // require_notes_ defaults true
+    ConstraintGraph graph; graph.add_constraint(g);
+
+    graph.step(vocab.encode(TT::Track, 0), vocab);  // melodic
+    graph.step(vocab.encode(TT::Bar, 0), vocab);
+    graph.step(vocab.encode(TT::HumanizeSkeletonStart, 0), vocab);
+    auto m = graph.get_mask(vocab);
+    CHECK(none_masked(m, vocab.range(TT::TimeAbsolutePos)));
+    CHECK(none_masked(m, vocab.range(TT::NoteOnset)));
+    CHECK(none_masked(m, vocab.range(TT::NotePitch)));
+    CHECK(all_masked(m, vocab.range(TT::VelocityLevel)));
+    CHECK(all_masked(m, vocab.range(TT::Delta)));
+    CHECK(all_masked(m, vocab.range(TT::DeltaDirection)));
+    // No note yet in this block — require_notes_ blocks SkeletonEnd.
+    CHECK(all_masked(m, vocab.range(TT::HumanizeSkeletonEnd)));
+}
+
+TEST_CASE("Grammar humanize skeleton: melodic note requires NoteDuration, then "
+          "SkeletonEnd becomes reachable but Velocity/Delta remain blocked") {
+    auto cfg = full_config();
+    Vocabulary vocab(cfg);
+    auto g = std::make_shared<GrammarConstraint>();
+    ConstraintGraph graph; graph.add_constraint(g);
+
+    graph.step(vocab.encode(TT::Track, 0), vocab);  // melodic (value=0)
+    graph.step(vocab.encode(TT::Bar, 0), vocab);
+    graph.step(vocab.encode(TT::HumanizeSkeletonStart, 0), vocab);
+    graph.step(vocab.encode(TT::TimeAbsolutePos, 0), vocab);
+    graph.step(vocab.encode(TT::NoteOnset, 60), vocab);
+    auto m_after_onset = graph.get_mask(vocab);
+    // Melodic: duration is mandatory next, regardless of humanize-skeleton mode.
+    CHECK(none_masked(m_after_onset, vocab.range(TT::NoteDuration)));
+    CHECK(all_masked(m_after_onset, vocab.range(TT::VelocityLevel)));
+
+    graph.step(vocab.encode(TT::NoteDuration, 10), vocab);
+    auto m_after_dur = graph.get_mask(vocab);
+    CHECK(none_masked(m_after_dur, vocab.range(TT::NoteOnset)));
+    // TimeAbsolutePos type is allowed again, but monotonicity forbids
+    // re-emitting position 0 (already visited) — check a later position.
+    auto tap = vocab.range(TT::TimeAbsolutePos);
+    CHECK(m_after_dur[tap.first + 10] == false);
+    CHECK(none_masked(m_after_dur, vocab.range(TT::HumanizeSkeletonEnd)));  // has a note now
+    CHECK(all_masked(m_after_dur, vocab.range(TT::VelocityLevel)));
+    CHECK(all_masked(m_after_dur, vocab.range(TT::Delta)));
+}
+
+TEST_CASE("Grammar humanize skeleton: drum note skips duration, SkeletonEnd "
+          "reachable immediately after") {
+    auto cfg = full_config();
+    Vocabulary vocab(cfg);
+    auto g = std::make_shared<GrammarConstraint>();
+    ConstraintGraph graph; graph.add_constraint(g);
+
+    graph.step(vocab.encode(TT::Track, 1), vocab);  // drum (value=1)
+    graph.step(vocab.encode(TT::Bar, 0), vocab);
+    graph.step(vocab.encode(TT::HumanizeSkeletonStart, 0), vocab);
+    graph.step(vocab.encode(TT::TimeAbsolutePos, 0), vocab);
+    graph.step(vocab.encode(TT::NoteOnset, 36), vocab);
+    auto m = graph.get_mask(vocab);
+    CHECK(none_masked(m, vocab.range(TT::NoteOnset)));
+    // TimeAbsolutePos type is allowed again, but monotonicity forbids
+    // re-emitting position 0 (already visited) — check a later position.
+    auto tap = vocab.range(TT::TimeAbsolutePos);
+    CHECK(m[tap.first + 10] == false);
+    CHECK(none_masked(m, vocab.range(TT::HumanizeSkeletonEnd)));
+    CHECK(all_masked(m, vocab.range(TT::VelocityLevel)));
+    CHECK(all_masked(m, vocab.range(TT::NoteDuration)));
 }
 
 // ---------------------------------------------------------------------------
@@ -762,6 +937,24 @@ TEST_CASE("ConstraintGraph: set_fillin_drum propagates to GrammarConstraint") {
     g.step(vocab.encode(TT::TimeAbsolutePos, 0), vocab);
     g.step(vocab.encode(TT::NoteOnset, 36), vocab);
     CHECK(all_masked(g.get_mask(vocab), vocab.range(TT::NoteDuration)));
+}
+
+TEST_CASE("ConstraintGraph: set_humanize_note_count propagates to GrammarConstraint") {
+    auto cfg = full_config();
+    Vocabulary vocab(cfg);
+    auto g_grammar = std::make_shared<GrammarConstraint>();
+
+    ConstraintGraph g; g.add_constraint(g_grammar);
+    g.step(vocab.encode(TT::HumanizeStart, 0), vocab);
+    g.set_humanize_note_count(1);
+    auto m1 = g.get_mask(vocab);
+    CHECK(none_masked(m1, vocab.range(TT::VelocityLevel)));
+    CHECK(all_masked(m1, vocab.range(TT::HumanizeEnd)));
+
+    g.step(vocab.encode(TT::VelocityLevel, 5), vocab);
+    auto m2 = g.get_mask(vocab);
+    CHECK(none_masked(m2, vocab.range(TT::HumanizeEnd)));
+    CHECK(all_masked(m2, vocab.range(TT::VelocityLevel)));
 }
 
 TEST_CASE("ConstraintGraph: null constraint is ignored, not crashed") {

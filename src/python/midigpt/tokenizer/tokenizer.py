@@ -16,9 +16,15 @@ def resample_delta(score: Score, source_res: int, target_res: int, use_delta: bo
     is required so configs with emit_delta_tokens=false get byte-identical
     output to before microtiming residuals existed.
 
-    When True, the true continuous position (onset_ticks + delta/source_res)
-    is rescaled to target_res and truncated; the new leftover fraction becomes
-    the note's delta, again in units of 1/target_res of one target_res cell.
+    When True, the true continuous position is first rounded to the finest
+    grid the encoding can ever represent -- one target_res cell split into
+    target_res microtiming sub-units, matching Delta's own token unit (see
+    encoder_config.cpp) -- since that is the only place precision loss should
+    happen. onset_ticks is then the *nearest* target_res cell to that rounded
+    position, and the leftover is an exact integer number of sub-units (both
+    operands are already integers, so no further rounding is introduced) that
+    becomes a signed note.delta. Round-tripping onset+delta back through this
+    same resolution is therefore lossless beyond that one initial rounding.
     """
     if source_res == target_res and all(
         n.delta == 0 for t in score.tracks for b in t.bars for n in b.notes
@@ -26,17 +32,17 @@ def resample_delta(score: Score, source_res: int, target_res: int, use_delta: bo
         return score
 
     scale = target_res / source_res
+    micro_per_cell = target_res  # Delta's own unit: 1/target_res of one target_res cell
     score.resolution = target_res
     for track in score.tracks:
         for bar in track.bars:
             for note in bar.notes:
                 if use_delta:
                     true_pos = (note.onset_ticks + note.delta / source_res) * scale
-                    new_onset = int(true_pos)
-                    new_onset = max(0, new_onset)
-                    residual = true_pos - new_onset
+                    micro = round(true_pos * micro_per_cell)
+                    new_onset = max(0, round(micro / micro_per_cell))
                     note.onset_ticks = new_onset
-                    note.delta = int(round(residual * target_res))
+                    note.delta = micro - new_onset * micro_per_cell
                 else:
                     new_onset = max(0, int(target_res * note.onset_ticks / source_res))
                     note.onset_ticks = new_onset

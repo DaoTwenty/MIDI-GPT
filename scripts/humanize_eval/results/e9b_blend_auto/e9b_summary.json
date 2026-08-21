@@ -1,0 +1,33 @@
+{
+  "checkpoint_a": "/scratch/triana24/MIDI-GPT/runs/humanize_tiny-20260807-035822/model_final.safetensors",
+  "checkpoint_e": "/scratch/triana24/MIDI-GPT/runs/humanize_tiny_e-20260807-223945/model_final.safetensors",
+  "n_pieces": 200,
+  "detector_accuracy": {
+    "mean_abs_alpha_error": 0.025812323716745612,
+    "pearson_r_oracle_vs_estimated_alpha": 0.9593301229281554,
+    "mean_oracle_alpha": 0.20591666666666666,
+    "mean_auto_alpha": 0.18010434294992106
+  },
+  "mixed_ctx": {
+    "A_alone": {
+      "n": 200,
+      "mean_vel_wasserstein": 15.867027971634398,
+      "degeneracy_rate": 0.375
+    },
+    "E_alone": {
+      "n": 200,
+      "mean_vel_wasserstein": 16.292953200415212,
+      "degeneracy_rate": 0.14
+    },
+    "Oracle_Blend": {
+      "n": 200,
+      "mean_vel_wasserstein": 15.065285666460465,
+      "degeneracy_rate": 0.1
+    },
+    "Auto_Blend": {
+      "n": 200,
+      "mean_vel_wasserstein": 15.193071368405118,
+      "degeneracy_rate": 0.125
+    }
+  }
+}

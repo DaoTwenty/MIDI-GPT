@@ -1,0 +1,54 @@
+{
+  "condition": {
+    "temperature": 0.7,
+    "top_p": 1.0,
+    "bars_per_step_mode": "full"
+  },
+  "coverage_sweep": {
+    "1.0": {
+      "n_pieces": 300,
+      "mean_vel_wasserstein": 22.901917564120144,
+      "mean_gen_vel_stdev": 4.025644574717141,
+      "mean_gt_vel_stdev": 6.645039817616651,
+      "degeneracy_rate": 0.2733333333333333
+    },
+    "0.5": {
+      "n_pieces": 300,
+      "mean_vel_wasserstein": 7.345962842707085,
+      "mean_gen_vel_stdev": 4.996781767182632,
+      "mean_gt_vel_stdev": 6.574657220979801,
+      "degeneracy_rate": 0.17666666666666667
+    },
+    "0.25": {
+      "n_pieces": 300,
+      "mean_vel_wasserstein": 6.707412703839792,
+      "mean_gen_vel_stdev": 4.389476949010233,
+      "mean_gt_vel_stdev": 4.858188392312408,
+      "degeneracy_rate": 0.25333333333333335
+    }
+  },
+  "context_ablation": {
+    "n_pieces": 300,
+    "mean_vel_wasserstein": {
+      "true": 6.536454809932418,
+      "flat": 22.701501344778094,
+      "swap": 25.380861246574778
+    },
+    "mean_vel_stdev": {
+      "true": 5.004429988681162,
+      "flat": 4.304677368015331,
+      "swap": 4.550863272271626
+    },
+    "degeneracy_rate": {
+      "true": 0.20333333333333334,
+      "flat": 0.31666666666666665,
+      "swap": 0.21333333333333335
+    },
+    "style_match_effect": {
+      "mean": 0.10809199556919352,
+      "ci_lo": -0.006180472641303316,
+      "ci_hi": 0.20772408347585108,
+      "n_pairs": 152
+    }
+  }
+}

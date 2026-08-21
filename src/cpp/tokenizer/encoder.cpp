@@ -11,12 +11,24 @@ namespace midigpt::tokenizer {
 
 Encoder::Encoder(const Vocabulary& vocab) : vocab_(vocab) {}
 
+// Full     : normal in-place encoding (pitch/duration + velocity/delta).
+// Skeleton : pitch/duration only — velocity/delta withheld (Humanize
+//            in-place pass; the notes themselves are NOT hidden).
+// Expressive: velocity/delta only, no pitch/duration, no TimeAbsolutePos —
+//            used for the Humanize appendix. VelocityLevel is ALWAYS emitted
+//            per note (bypassing velocity_sticky / the mapped_vel>0 skip)
+//            so it unambiguously marks the start of each note's group —
+//            decode/grammar rely on this to splice appendix content back
+//            onto the right note without any pitch data to match against.
+enum class NoteEncodeMode { Full, SkeletonOnly, ExpressiveOnly };
+
 static void encode_bar_notes(
     std::vector<int>& tokens, const Score& score, const Bar& bar,
     bool is_drum, const EncoderConfig& config,
     const std::function<int(TokenType, int)>& clamp_encode,
     const Vocabulary& vocab_,
-    bool eff_velocity, bool eff_microtiming)
+    bool eff_velocity, bool eff_microtiming,
+    NoteEncodeMode mode = NoteEncodeMode::Full)
 {
     std::map<int, std::vector<int>> notes_by_onset;
     std::vector<int> onset_order;
@@ -28,7 +40,11 @@ static void encode_bar_notes(
         }
         notes_by_onset[onset].push_back(note_idx);
     }
-    // Match orig encoder: emit chord notes in ascending pitch order.
+    // Match orig encoder: emit chord notes in ascending pitch order. This
+    // ordering depends only on bar.note_indices/pitch, so it is identical
+    // across Full/SkeletonOnly/ExpressiveOnly calls for the same bar —
+    // required so the Nth note here always lines up with the Nth note in
+    // the corresponding Humanize appendix block.
     for (auto& [_, bucket] : notes_by_onset) {
         std::sort(bucket.begin(), bucket.end(),
                   [&](int a, int b) { return score.notes[a].pitch < score.notes[b].pitch; });
@@ -36,38 +52,44 @@ static void encode_bar_notes(
 
     int last_velocity = -1;
     for (int onset : onset_order) {
-        if (onset > 0 && vocab_.has(TokenType::TimeAbsolutePos)) {
+        if (mode != NoteEncodeMode::ExpressiveOnly
+            && onset > 0 && vocab_.has(TokenType::TimeAbsolutePos)) {
             tokens.push_back(clamp_encode(TokenType::TimeAbsolutePos, onset));
         }
         for (int ni : notes_by_onset[onset]) {
             const auto& note = score.notes[ni];
-            if (eff_velocity && vocab_.has(TokenType::VelocityLevel)) {
-                int vel_domain = vocab_.domain_size(TokenType::VelocityLevel);
-                VelocityQuantizer vq(vel_domain);
-                int mapped_vel = vq.encode(note.velocity);
-                bool emit_velocity = mapped_vel > 0
-                    && (!config.velocity_sticky || mapped_vel != last_velocity);
-                if (emit_velocity) {
-                    tokens.push_back(clamp_encode(TokenType::VelocityLevel, mapped_vel));
-                    last_velocity = mapped_vel;
+            if (mode != NoteEncodeMode::SkeletonOnly) {
+                if (eff_velocity && vocab_.has(TokenType::VelocityLevel)) {
+                    int vel_domain = vocab_.domain_size(TokenType::VelocityLevel);
+                    VelocityQuantizer vq(vel_domain);
+                    int mapped_vel = vq.encode(note.velocity);
+                    bool emit_velocity = (mode == NoteEncodeMode::ExpressiveOnly)
+                        || (mapped_vel > 0
+                            && (!config.velocity_sticky || mapped_vel != last_velocity));
+                    if (emit_velocity) {
+                        tokens.push_back(clamp_encode(TokenType::VelocityLevel, mapped_vel));
+                        last_velocity = mapped_vel;
+                    }
+                }
+                if (eff_microtiming && config.emit_delta_tokens && note.delta != 0) {
+                    int d = note.delta;
+                    if (d < 0 && vocab_.has(TokenType::DeltaDirection)) {
+                        tokens.push_back(vocab_.encode(TokenType::DeltaDirection, 0));
+                        d = -d;
+                    }
+                    if (d > 0 && vocab_.has(TokenType::Delta)) {
+                        int max_delta = vocab_.domain_size(TokenType::Delta) - 1;
+                        tokens.push_back(clamp_encode(TokenType::Delta, std::min(d, max_delta)));
+                    }
                 }
             }
-            if (eff_microtiming && config.emit_delta_tokens && note.delta != 0) {
-                int d = note.delta;
-                if (d < 0 && vocab_.has(TokenType::DeltaDirection)) {
-                    tokens.push_back(vocab_.encode(TokenType::DeltaDirection, 0));
-                    d = -d;
+            if (mode != NoteEncodeMode::ExpressiveOnly) {
+                tokens.push_back(clamp_encode(TokenType::NoteOnset, note.pitch));
+                if (!is_drum && vocab_.has(TokenType::NoteDuration)) {
+                    int dur_domain = vocab_.domain_size(TokenType::NoteDuration);
+                    int dur = std::min(note.duration_ticks, dur_domain) - 1;
+                    tokens.push_back(clamp_encode(TokenType::NoteDuration, std::max(0, dur)));
                 }
-                if (d > 0 && vocab_.has(TokenType::Delta)) {
-                    int max_delta = vocab_.domain_size(TokenType::Delta) - 1;
-                    tokens.push_back(clamp_encode(TokenType::Delta, std::min(d, max_delta)));
-                }
-            }
-            tokens.push_back(clamp_encode(TokenType::NoteOnset, note.pitch));
-            if (!is_drum && vocab_.has(TokenType::NoteDuration)) {
-                int dur_domain = vocab_.domain_size(TokenType::NoteDuration);
-                int dur = std::min(note.duration_ticks, dur_domain) - 1;
-                tokens.push_back(clamp_encode(TokenType::NoteDuration, std::max(0, dur)));
             }
         }
     }
@@ -89,6 +111,11 @@ EncodeResult Encoder::encode_full(const Score& score,
     if (do_multi_fill && !config.supports_infill) {
         throw std::invalid_argument(
             "Encoder: multi_fill requested but config.supports_infill is false");
+    }
+    const bool do_multi_humanize = !opts.multi_humanize.empty();
+    if (do_multi_humanize && !config.supports_humanize) {
+        throw std::invalid_argument(
+            "Encoder: multi_humanize requested but config.supports_humanize is false");
     }
 
     auto clamp_encode = [&](TokenType type, int val) {
@@ -115,6 +142,9 @@ EncodeResult Encoder::encode_full(const Score& score,
     }
     if (vocab_.has(TokenType::UseMicrotiming)) {
         tokens.push_back(vocab_.encode(TokenType::UseMicrotiming, eff_microtiming ? 1 : 0));
+    }
+    if (vocab_.has(TokenType::HumanizeActive)) {
+        tokens.push_back(vocab_.encode(TokenType::HumanizeActive, do_multi_humanize ? 1 : 0));
     }
     if (opts.genre >= 0 && vocab_.has(TokenType::Genre)) {
         tokens.push_back(clamp_encode(TokenType::Genre, opts.genre));
@@ -228,6 +258,7 @@ EncodeResult Encoder::encode_full(const Score& score,
                 {"bar_BarLevelOnsetDensity_" + idx_str,      TokenType::BarLevelOnsetDensity},
                 {"bar_BarLevelOnsetPolyphonyMin_" + idx_str, TokenType::BarLevelOnsetPolyphonyMin},
                 {"bar_BarLevelOnsetPolyphonyMax_" + idx_str, TokenType::BarLevelOnsetPolyphonyMax},
+                {"bar_BarLevelVelocityRange_" + idx_str,     TokenType::BarLevelVelocityRange},
             };
             for (const auto& [key, type] : bar_attrs) {
                 if (vocab_.has(type) && track.attributes.count(key)) {
@@ -246,6 +277,8 @@ EncodeResult Encoder::encode_full(const Score& score,
             // Check for multi-fill placeholder
             bool is_infill = do_multi_fill
                 && opts.multi_fill.count({static_cast<int>(track_idx), bar_idx});
+            bool is_humanize = do_multi_humanize
+                && opts.multi_humanize.count({static_cast<int>(track_idx), bar_idx});
             bool emit_span = false;
             if (is_infill && vocab_.has(TokenType::FillInPlaceholder)) {
                 tokens.push_back(vocab_.encode(TokenType::FillInPlaceholder, 0));
@@ -261,8 +294,21 @@ EncodeResult Encoder::encode_full(const Score& score,
             else if (bar.future && vocab_.has(TokenType::MaskBar)) {
                 tokens.push_back(vocab_.encode(TokenType::MaskBar, 0));
             } else if (!is_infill) {
+                // Humanize bars are NOT hidden — their note skeleton (pitch/
+                // duration) is emitted normally, bracketed by
+                // HumanizeSkeletonStart/End; only Velocity/Delta are withheld
+                // here and deferred to the HumanizeStart/End appendix below.
+                bool emit_skeleton_bracket = is_humanize && vocab_.has(TokenType::HumanizeSkeletonStart);
+                if (emit_skeleton_bracket) {
+                    tokens.push_back(vocab_.encode(TokenType::HumanizeSkeletonStart, 0));
+                }
                 encode_bar_notes(tokens, score, bar, is_drum, config, clamp_encode, vocab_,
-                                 eff_velocity, eff_microtiming);
+                                 eff_velocity, eff_microtiming,
+                                 is_humanize ? NoteEncodeMode::SkeletonOnly
+                                             : NoteEncodeMode::Full);
+                if (emit_skeleton_bracket && vocab_.has(TokenType::HumanizeSkeletonEnd)) {
+                    tokens.push_back(vocab_.encode(TokenType::HumanizeSkeletonEnd, 0));
+                }
             }
 
             if (vocab_.has(TokenType::BarEnd)) {
@@ -298,6 +344,29 @@ EncodeResult Encoder::encode_full(const Score& score,
                              eff_velocity, eff_microtiming);
             if (vocab_.has(TokenType::FillInEnd)) {
                 tokens.push_back(vocab_.encode(TokenType::FillInEnd, 0));
+            }
+        }
+    }
+
+    // --- HUMANIZE BLOCKS ---
+    // Appendix, one HumanizeStart..HumanizeEnd block per flagged (track,bar),
+    // in the same set (lexicographic) order SessionState uses to build
+    // humanize_note_counts_ — mirrors the MULTI-FILL BLOCKS loop above, but
+    // carries only the withheld Velocity/Delta tokens, not the note skeleton.
+    if (do_multi_humanize) {
+        for (const auto& [t_idx, b_idx] : opts.multi_humanize) {
+            if (t_idx >= static_cast<int>(score.tracks.size())) continue;
+            const auto& track = score.tracks[t_idx];
+            if (b_idx >= static_cast<int>(track.bars.size())) continue;
+            bool is_drum = (track.type == TrackType::Drum);
+
+            if (vocab_.has(TokenType::HumanizeStart)) {
+                tokens.push_back(vocab_.encode(TokenType::HumanizeStart, 0));
+            }
+            encode_bar_notes(tokens, score, track.bars[b_idx], is_drum, config, clamp_encode, vocab_,
+                             eff_velocity, eff_microtiming, NoteEncodeMode::ExpressiveOnly);
+            if (vocab_.has(TokenType::HumanizeEnd)) {
+                tokens.push_back(vocab_.encode(TokenType::HumanizeEnd, 0));
             }
         }
     }

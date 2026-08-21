@@ -119,6 +119,23 @@ class TrainConfig:
     # then each (track, bar) cell is independently selected with probability p.
     infill_bar_fraction: float = 0.5
 
+    # ── Humanize training (independent of infill/bar masking) ─────────────
+    # Fraction of samples encoded with Humanize tokens (skeleton pitch/onset/
+    # duration fixed in place, Velocity/Delta regenerated via the appendix).
+    # 0.0 = never; set > 0 only for a supports_humanize=true checkpoint.
+    humanize_probability: float = 0.0
+    # Maximum per-cell humanize density. Same sampling scheme as infill_bar_fraction.
+    humanize_bar_fraction: float = 0.5
+    # Maximum per-track mechanical-context density (0.0 = disabled -- every
+    # context bar is always real, the original behaviour). See
+    # MidiGPTDataset for full semantics.
+    context_mechanical_fraction: float = 0.0
+    # Probability of drawing a structured target pattern (whole track /
+    # vertical / small window / whole window) instead of per-cell.
+    structured_target_probability: float = 0.0
+    mechanical_coherent_targets: bool = False
+    mechanical_coherent_residual: float = 0.0
+
     # ── Bar masking (independent of infill) ───────────────────────────────
     # Fraction of samples where MASK_BAR is applied (gate inside MaskBarConfig).
     # Set mask_apply_probability=0.0 to disable masking entirely.
@@ -155,6 +172,12 @@ def _validate_train_config(config: TrainConfig, encoder_config_json: dict) -> No
             f"infill_probability={config.infill_probability} > 0 but the encoder config "
             f"has supports_infill=false. Set infill_probability=0.0 or use an "
             f"infill-capable checkpoint."
+        )
+    if config.humanize_probability > 0 and not encoder_config_json.get("supports_humanize", False):
+        raise ValueError(
+            f"humanize_probability={config.humanize_probability} > 0 but the encoder config "
+            f"has supports_humanize=false. Set humanize_probability=0.0 or use a "
+            f"humanize-capable checkpoint."
         )
     if config.mask_apply_probability > 0:
         # Build a minimal vocabulary to test for MaskBar token presence.
@@ -300,6 +323,12 @@ def train(
         tokenizer=tokenizer,
         infill_probability=config.infill_probability,
         infill_bar_fraction=config.infill_bar_fraction,
+        humanize_probability=config.humanize_probability,
+        humanize_bar_fraction=config.humanize_bar_fraction,
+        context_mechanical_fraction=config.context_mechanical_fraction,
+        structured_target_probability=config.structured_target_probability,
+        mechanical_coherent_targets=config.mechanical_coherent_targets,
+        mechanical_coherent_residual=config.mechanical_coherent_residual,
         mask_bar_config=mask_cfg,
         max_seq_len=config.max_seq_len,
         max_tracks=config.max_tracks,
@@ -338,6 +367,7 @@ def train(
         accumulate_grad_batches=config.gradient_accumulation_steps,
         gradient_clip_val=config.max_grad_norm if config.max_grad_norm > 0 else None,
         val_check_interval=config.eval_steps if eval_path else None,
+        check_val_every_n_epoch=None if eval_path else 1,
         limit_val_batches=config.limit_val_batches or 1.0,
         log_every_n_steps=config.logging_steps,
         default_root_dir=config.output_dir,

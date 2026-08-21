@@ -1,0 +1,3110 @@
+{
+  "condition": {
+    "temperature": 0.7,
+    "top_p": 1.0,
+    "bars_per_step_mode": "full"
+  },
+  "n_pieces": 500,
+  "n_notes": 6866,
+  "regression": {
+    "gt": {
+      "r2": 0.003907164384292061,
+      "coefs": {
+        "intercept": 82.95140958196876,
+        "metrical_pos": -1.3053043070161796,
+        "pitch_rank_in_onset": -0.7291197628348445,
+        "top_voice": 2.1425094153959123,
+        "interval_from_prev": -0.05965448453265561
+      },
+      "ci": {
+        "mean": 0.006433948902117302,
+        "ci_lo": 0.0009281686098147057,
+        "ci_hi": 0.020156408351362898
+      }
+    },
+    "generated": {
+      "r2": 0.004478052540614952,
+      "coefs": {
+        "intercept": 83.342753499022,
+        "metrical_pos": -0.16142557407526553,
+        "pitch_rank_in_onset": -0.9270303014936104,
+        "top_voice": 2.771177075455273,
+        "interval_from_prev": -0.0033501192929382482
+      },
+      "ci": {
+        "mean": 0.007435805782302329,
+        "ci_lo": 0.0005935070585367797,
+        "ci_hi": 0.025746987753035633
+      }
+    },
+    "shuffled": {
+      "r2": 0.00027770223911138814,
+      "coefs": {
+        "intercept": 82.60048205388652,
+        "metrical_pos": -1.0207367530892768,
+        "pitch_rank_in_onset": -0.11781610998882089,
+        "top_voice": -0.13641226730927858,
+        "interval_from_prev": -0.011800858468042009
+      },
+      "ci": {
+        "mean": 0.002081908438509922,
+        "ci_lo": 0.0001905978139776776,
+        "ci_hi": 0.007872836834186048
+      }
+    }
+  },
+  "profile": {
+    "gt": [
+      86.04377104377105,
+      81.51404494382022,
+      84.02240896358543,
+      83.26580226904376,
+      83.52814569536424,
+      84.01826484018265,
+      81.48581997533908,
+      81.98582995951416,
+      85.52666666666667,
+      84.59827833572453,
+      82.77075812274369,
+      83.23618090452261
+    ],
+    "generated": [
+      86.41638608305276,
+      83.81460674157303,
+      85.57422969187675,
+      83.47163695299838,
+      84.81788079470199,
+      86.5296803652968,
+      82.61282367447596,
+      84.20445344129554,
+      87.38666666666667,
+      84.37302725968436,
+      86.33574007220217,
+      84.64154103852596
+    ],
+    "shuffled": [
+      83.78900112233445,
+      80.90449438202248,
+      81.36974789915966,
+      82.19448946515396,
+      81.28476821192054,
+      80.25114155251141,
+      81.69297163995068,
+      82.8663967611336,
+      80.55777777777777,
+      82.62410329985653,
+      81.87906137184116,
+      81.73534338358459
+    ],
+    "pearson_gen_gt": 0.7245470154443118,
+    "pearson_shuf_gt": 0.16473739082127925
+  },
+  "gate_g3": {
+    "r2_ratio": 1.1461131655013101,
+    "r2_ratio_pass": true,
+    "sign_match_pass": true,
+    "overall_pass": true
+  },
+  "per_piece": [
+    {
+      "n_notes": 26,
+      "gt_vel_mean": 81.34615384615384,
+      "gen_vel_mean": 85.61538461538461,
+      "shuf_vel_mean": 75.42307692307692
+    },
+    {
+      "n_notes": 33,
+      "gt_vel_mean": 62.0,
+      "gen_vel_mean": 62.0,
+      "shuf_vel_mean": 84.3030303030303
+    },
+    {
+      "n_notes": 4,
+      "gt_vel_mean": 104.75,
+      "gen_vel_mean": 107.75,
+      "shuf_vel_mean": 118.25
+    },
+    {
+      "n_notes": 4,
+      "gt_vel_mean": 71.0,
+      "gen_vel_mean": 67.0,
+      "shuf_vel_mean": 100.25
+    },
+    {
+      "n_notes": 8,
+      "gt_vel_mean": 82.375,
+      "gen_vel_mean": 79.375,
+      "shuf_vel_mean": 71.375
+    },
+    {
+      "n_notes": 24,
+      "gt_vel_mean": 86.83333333333333,
+      "gen_vel_mean": 87.83333333333333,
+      "shuf_vel_mean": 93.20833333333333
+    },
+    {
+      "n_notes": 16,
+      "gt_vel_mean": 102.75,
+      "gen_vel_mean": 97.125,
+      "shuf_vel_mean": 73.75
+    },
+    {
+      "n_notes": 52,
+      "gt_vel_mean": 105.67307692307692,
+      "gen_vel_mean": 103.90384615384616,
+      "shuf_vel_mean": 55.65384615384615
+    },
+    {
+      "n_notes": 31,
+      "gt_vel_mean": 59.32258064516129,
+      "gen_vel_mean": 59.38709677419355,
+      "shuf_vel_mean": 67.06451612903226
+    },
+    {
+      "n_notes": 3,
+      "gt_vel_mean": 37.333333333333336,
+      "gen_vel_mean": 36.666666666666664,
+      "shuf_vel_mean": 93.33333333333333
+    },
+    {
+      "n_notes": 10,
+      "gt_vel_mean": 101.5,
+      "gen_vel_mean": 100.4,
+      "shuf_vel_mean": 108.5
+    },
+    {
+      "n_notes": 23,
+      "gt_vel_mean": 99.1304347826087,
+      "gen_vel_mean": 100.0,
+      "shuf_vel_mean": 80.0
+    },
+    {
+      "n_notes": 43,
+      "gt_vel_mean": 64.74418604651163,
+      "gen_vel_mean": 64.55813953488372,
+      "shuf_vel_mean": 86.74418604651163
+    },
+    {
+      "n_notes": 3,
+      "gt_vel_mean": 74.33333333333333,
+      "gen_vel_mean": 75.66666666666667,
+      "shuf_vel_mean": 78.66666666666667
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 65.0,
+      "gen_vel_mean": 65.0,
+      "shuf_vel_mean": 102.6
+    },
+    {
+      "n_notes": 32,
+      "gt_vel_mean": 78.40625,
+      "gen_vel_mean": 75.875,
+      "shuf_vel_mean": 86.6875
+    },
+    {
+      "n_notes": 10,
+      "gt_vel_mean": 117.4,
+      "gen_vel_mean": 120.0,
+      "shuf_vel_mean": 72.9
+    },
+    {
+      "n_notes": 9,
+      "gt_vel_mean": 103.22222222222223,
+      "gen_vel_mean": 103.88888888888889,
+      "shuf_vel_mean": 69.66666666666667
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 90.71428571428571,
+      "gen_vel_mean": 85.57142857142857,
+      "shuf_vel_mean": 79.28571428571429
+    },
+    {
+      "n_notes": 14,
+      "gt_vel_mean": 96.0,
+      "gen_vel_mean": 127.0,
+      "shuf_vel_mean": 93.35714285714286
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 102.0,
+      "gen_vel_mean": 105.0,
+      "shuf_vel_mean": 81.4
+    },
+    {
+      "n_notes": 48,
+      "gt_vel_mean": 82.125,
+      "gen_vel_mean": 82.0,
+      "shuf_vel_mean": 89.08333333333333
+    },
+    {
+      "n_notes": 43,
+      "gt_vel_mean": 46.48837209302326,
+      "gen_vel_mean": 47.883720930232556,
+      "shuf_vel_mean": 81.67441860465117
+    },
+    {
+      "n_notes": 13,
+      "gt_vel_mean": 104.92307692307692,
+      "gen_vel_mean": 100.6923076923077,
+      "shuf_vel_mean": 69.3076923076923
+    },
+    {
+      "n_notes": 23,
+      "gt_vel_mean": 64.0,
+      "gen_vel_mean": 64.0,
+      "shuf_vel_mean": 98.6086956521739
+    },
+    {
+      "n_notes": 6,
+      "gt_vel_mean": 84.66666666666667,
+      "gen_vel_mean": 87.0,
+      "shuf_vel_mean": 82.33333333333333
+    },
+    {
+      "n_notes": 12,
+      "gt_vel_mean": 72.66666666666667,
+      "gen_vel_mean": 72.66666666666667,
+      "shuf_vel_mean": 74.83333333333333
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 70.85714285714286,
+      "gen_vel_mean": 70.42857142857143,
+      "shuf_vel_mean": 52.285714285714285
+    },
+    {
+      "n_notes": 28,
+      "gt_vel_mean": 118.85714285714286,
+      "gen_vel_mean": 125.10714285714286,
+      "shuf_vel_mean": 82.10714285714286
+    },
+    {
+      "n_notes": 2,
+      "gt_vel_mean": 91.0,
+      "gen_vel_mean": 85.0,
+      "shuf_vel_mean": 89.0
+    },
+    {
+      "n_notes": 8,
+      "gt_vel_mean": 80.25,
+      "gen_vel_mean": 96.0,
+      "shuf_vel_mean": 51.625
+    },
+    {
+      "n_notes": 11,
+      "gt_vel_mean": 76.54545454545455,
+      "gen_vel_mean": 70.18181818181819,
+      "shuf_vel_mean": 81.81818181818181
+    },
+    {
+      "n_notes": 9,
+      "gt_vel_mean": 84.22222222222223,
+      "gen_vel_mean": 79.88888888888889,
+      "shuf_vel_mean": 56.22222222222222
+    },
+    {
+      "n_notes": 47,
+      "gt_vel_mean": 79.23404255319149,
+      "gen_vel_mean": 81.31914893617021,
+      "shuf_vel_mean": 110.08510638297872
+    },
+    {
+      "n_notes": 28,
+      "gt_vel_mean": 97.96428571428571,
+      "gen_vel_mean": 90.32142857142857,
+      "shuf_vel_mean": 87.60714285714286
+    },
+    {
+      "n_notes": 9,
+      "gt_vel_mean": 85.66666666666667,
+      "gen_vel_mean": 87.44444444444444,
+      "shuf_vel_mean": 88.88888888888889
+    },
+    {
+      "n_notes": 10,
+      "gt_vel_mean": 54.8,
+      "gen_vel_mean": 53.3,
+      "shuf_vel_mean": 71.5
+    },
+    {
+      "n_notes": 14,
+      "gt_vel_mean": 107.92857142857143,
+      "gen_vel_mean": 110.0,
+      "shuf_vel_mean": 57.857142857142854
+    },
+    {
+      "n_notes": 33,
+      "gt_vel_mean": 69.0,
+      "gen_vel_mean": 70.48484848484848,
+      "shuf_vel_mean": 122.93939393939394
+    },
+    {
+      "n_notes": 3,
+      "gt_vel_mean": 59.666666666666664,
+      "gen_vel_mean": 59.333333333333336,
+      "shuf_vel_mean": 91.66666666666667
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 66.6,
+      "gen_vel_mean": 67.4,
+      "shuf_vel_mean": 106.2
+    },
+    {
+      "n_notes": 15,
+      "gt_vel_mean": 99.8,
+      "gen_vel_mean": 99.93333333333334,
+      "shuf_vel_mean": 64.66666666666667
+    },
+    {
+      "n_notes": 9,
+      "gt_vel_mean": 98.66666666666667,
+      "gen_vel_mean": 98.55555555555556,
+      "shuf_vel_mean": 65.11111111111111
+    },
+    {
+      "n_notes": 24,
+      "gt_vel_mean": 46.25,
+      "gen_vel_mean": 46.666666666666664,
+      "shuf_vel_mean": 71.5
+    },
+    {
+      "n_notes": 1,
+      "gt_vel_mean": 55.0,
+      "gen_vel_mean": 53.0,
+      "shuf_vel_mean": 75.0
+    },
+    {
+      "n_notes": 6,
+      "gt_vel_mean": 80.16666666666667,
+      "gen_vel_mean": 80.83333333333333,
+      "shuf_vel_mean": 91.5
+    },
+    {
+      "n_notes": 6,
+      "gt_vel_mean": 64.66666666666667,
+      "gen_vel_mean": 64.83333333333333,
+      "shuf_vel_mean": 111.33333333333333
+    },
+    {
+      "n_notes": 24,
+      "gt_vel_mean": 94.75,
+      "gen_vel_mean": 94.16666666666667,
+      "shuf_vel_mean": 89.04166666666667
+    },
+    {
+      "n_notes": 15,
+      "gt_vel_mean": 107.4,
+      "gen_vel_mean": 106.73333333333333,
+      "shuf_vel_mean": 72.0
+    },
+    {
+      "n_notes": 8,
+      "gt_vel_mean": 77.0,
+      "gen_vel_mean": 70.25,
+      "shuf_vel_mean": 59.75
+    },
+    {
+      "n_notes": 15,
+      "gt_vel_mean": 91.13333333333334,
+      "gen_vel_mean": 85.6,
+      "shuf_vel_mean": 40.0
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 90.0,
+      "gen_vel_mean": 90.0,
+      "shuf_vel_mean": 70.6
+    },
+    {
+      "n_notes": 20,
+      "gt_vel_mean": 96.5,
+      "gen_vel_mean": 96.95,
+      "shuf_vel_mean": 102.7
+    },
+    {
+      "n_notes": 14,
+      "gt_vel_mean": 118.07142857142857,
+      "gen_vel_mean": 119.5,
+      "shuf_vel_mean": 73.64285714285714
+    },
+    {
+      "n_notes": 14,
+      "gt_vel_mean": 82.14285714285714,
+      "gen_vel_mean": 81.0,
+      "shuf_vel_mean": 107.35714285714286
+    },
+    {
+      "n_notes": 1,
+      "gt_vel_mean": 66.0,
+      "gen_vel_mean": 127.0,
+      "shuf_vel_mean": 41.0
+    },
+    {
+      "n_notes": 17,
+      "gt_vel_mean": 123.58823529411765,
+      "gen_vel_mean": 125.05882352941177,
+      "shuf_vel_mean": 70.58823529411765
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 88.8,
+      "gen_vel_mean": 87.6,
+      "shuf_vel_mean": 90.0
+    },
+    {
+      "n_notes": 12,
+      "gt_vel_mean": 94.91666666666667,
+      "gen_vel_mean": 120.0,
+      "shuf_vel_mean": 99.75
+    },
+    {
+      "n_notes": 24,
+      "gt_vel_mean": 72.83333333333333,
+      "gen_vel_mean": 74.20833333333333,
+      "shuf_vel_mean": 96.20833333333333
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 109.2,
+      "gen_vel_mean": 115.0,
+      "shuf_vel_mean": 79.2
+    },
+    {
+      "n_notes": 15,
+      "gt_vel_mean": 81.53333333333333,
+      "gen_vel_mean": 85.26666666666667,
+      "shuf_vel_mean": 65.93333333333334
+    },
+    {
+      "n_notes": 13,
+      "gt_vel_mean": 102.84615384615384,
+      "gen_vel_mean": 104.38461538461539,
+      "shuf_vel_mean": 70.92307692307692
+    },
+    {
+      "n_notes": 10,
+      "gt_vel_mean": 92.8,
+      "gen_vel_mean": 96.0,
+      "shuf_vel_mean": 116.2
+    },
+    {
+      "n_notes": 3,
+      "gt_vel_mean": 71.66666666666667,
+      "gen_vel_mean": 74.0,
+      "shuf_vel_mean": 71.0
+    },
+    {
+      "n_notes": 55,
+      "gt_vel_mean": 45.345454545454544,
+      "gen_vel_mean": 29.89090909090909,
+      "shuf_vel_mean": 79.41818181818182
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 75.0,
+      "gen_vel_mean": 78.85714285714286,
+      "shuf_vel_mean": 77.57142857142857
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 64.71428571428571,
+      "gen_vel_mean": 64.71428571428571,
+      "shuf_vel_mean": 47.57142857142857
+    },
+    {
+      "n_notes": 6,
+      "gt_vel_mean": 64.0,
+      "gen_vel_mean": 55.0,
+      "shuf_vel_mean": 55.0
+    },
+    {
+      "n_notes": 4,
+      "gt_vel_mean": 71.0,
+      "gen_vel_mean": 71.0,
+      "shuf_vel_mean": 103.5
+    },
+    {
+      "n_notes": 8,
+      "gt_vel_mean": 93.25,
+      "gen_vel_mean": 91.75,
+      "shuf_vel_mean": 56.0
+    },
+    {
+      "n_notes": 23,
+      "gt_vel_mean": 64.0,
+      "gen_vel_mean": 57.69565217391305,
+      "shuf_vel_mean": 109.34782608695652
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 85.0,
+      "gen_vel_mean": 92.4,
+      "shuf_vel_mean": 119.6
+    },
+    {
+      "n_notes": 19,
+      "gt_vel_mean": 69.47368421052632,
+      "gen_vel_mean": 65.6842105263158,
+      "shuf_vel_mean": 110.26315789473684
+    },
+    {
+      "n_notes": 32,
+      "gt_vel_mean": 125.5,
+      "gen_vel_mean": 125.84375,
+      "shuf_vel_mean": 110.28125
+    },
+    {
+      "n_notes": 24,
+      "gt_vel_mean": 38.083333333333336,
+      "gen_vel_mean": 76.0,
+      "shuf_vel_mean": 80.04166666666667
+    },
+    {
+      "n_notes": 8,
+      "gt_vel_mean": 72.25,
+      "gen_vel_mean": 72.25,
+      "shuf_vel_mean": 84.125
+    },
+    {
+      "n_notes": 2,
+      "gt_vel_mean": 100.0,
+      "gen_vel_mean": 109.0,
+      "shuf_vel_mean": 57.5
+    },
+    {
+      "n_notes": 8,
+      "gt_vel_mean": 72.0,
+      "gen_vel_mean": 72.0,
+      "shuf_vel_mean": 109.625
+    },
+    {
+      "n_notes": 11,
+      "gt_vel_mean": 88.54545454545455,
+      "gen_vel_mean": 85.36363636363636,
+      "shuf_vel_mean": 42.54545454545455
+    },
+    {
+      "n_notes": 8,
+      "gt_vel_mean": 95.875,
+      "gen_vel_mean": 110.5,
+      "shuf_vel_mean": 75.125
+    },
+    {
+      "n_notes": 9,
+      "gt_vel_mean": 110.77777777777777,
+      "gen_vel_mean": 107.22222222222223,
+      "shuf_vel_mean": 71.11111111111111
+    },
+    {
+      "n_notes": 6,
+      "gt_vel_mean": 105.5,
+      "gen_vel_mean": 102.16666666666667,
+      "shuf_vel_mean": 75.5
+    },
+    {
+      "n_notes": 11,
+      "gt_vel_mean": 105.72727272727273,
+      "gen_vel_mean": 108.54545454545455,
+      "shuf_vel_mean": 77.45454545454545
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 77.42857142857143,
+      "gen_vel_mean": 70.14285714285714,
+      "shuf_vel_mean": 50.714285714285715
+    },
+    {
+      "n_notes": 3,
+      "gt_vel_mean": 65.0,
+      "gen_vel_mean": 65.0,
+      "shuf_vel_mean": 65.66666666666667
+    },
+    {
+      "n_notes": 30,
+      "gt_vel_mean": 99.4,
+      "gen_vel_mean": 103.4,
+      "shuf_vel_mean": 81.86666666666666
+    },
+    {
+      "n_notes": 13,
+      "gt_vel_mean": 86.6923076923077,
+      "gen_vel_mean": 89.07692307692308,
+      "shuf_vel_mean": 90.23076923076923
+    },
+    {
+      "n_notes": 8,
+      "gt_vel_mean": 95.875,
+      "gen_vel_mean": 81.75,
+      "shuf_vel_mean": 59.75
+    },
+    {
+      "n_notes": 2,
+      "gt_vel_mean": 69.5,
+      "gen_vel_mean": 76.0,
+      "shuf_vel_mean": 78.0
+    },
+    {
+      "n_notes": 4,
+      "gt_vel_mean": 68.0,
+      "gen_vel_mean": 64.0,
+      "shuf_vel_mean": 94.5
+    },
+    {
+      "n_notes": 77,
+      "gt_vel_mean": 68.2987012987013,
+      "gen_vel_mean": 79.06493506493507,
+      "shuf_vel_mean": 63.857142857142854
+    },
+    {
+      "n_notes": 11,
+      "gt_vel_mean": 56.0,
+      "gen_vel_mean": 59.54545454545455,
+      "shuf_vel_mean": 66.0909090909091
+    },
+    {
+      "n_notes": 8,
+      "gt_vel_mean": 67.25,
+      "gen_vel_mean": 72.125,
+      "shuf_vel_mean": 96.0
+    },
+    {
+      "n_notes": 24,
+      "gt_vel_mean": 93.41666666666667,
+      "gen_vel_mean": 93.875,
+      "shuf_vel_mean": 94.16666666666667
+    },
+    {
+      "n_notes": 75,
+      "gt_vel_mean": 79.92,
+      "gen_vel_mean": 92.24,
+      "shuf_vel_mean": 71.77333333333333
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 81.28571428571429,
+      "gen_vel_mean": 52.142857142857146,
+      "shuf_vel_mean": 62.57142857142857
+    },
+    {
+      "n_notes": 9,
+      "gt_vel_mean": 66.77777777777777,
+      "gen_vel_mean": 65.88888888888889,
+      "shuf_vel_mean": 85.55555555555556
+    },
+    {
+      "n_notes": 2,
+      "gt_vel_mean": 49.0,
+      "gen_vel_mean": 49.0,
+      "shuf_vel_mean": 77.5
+    },
+    {
+      "n_notes": 16,
+      "gt_vel_mean": 83.125,
+      "gen_vel_mean": 81.4375,
+      "shuf_vel_mean": 60.6875
+    },
+    {
+      "n_notes": 27,
+      "gt_vel_mean": 70.92592592592592,
+      "gen_vel_mean": 69.92592592592592,
+      "shuf_vel_mean": 71.48148148148148
+    },
+    {
+      "n_notes": 3,
+      "gt_vel_mean": 111.0,
+      "gen_vel_mean": 113.0,
+      "shuf_vel_mean": 98.66666666666667
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 55.0,
+      "gen_vel_mean": 56.6,
+      "shuf_vel_mean": 96.2
+    },
+    {
+      "n_notes": 3,
+      "gt_vel_mean": 82.0,
+      "gen_vel_mean": 47.0,
+      "shuf_vel_mean": 78.66666666666667
+    },
+    {
+      "n_notes": 11,
+      "gt_vel_mean": 73.63636363636364,
+      "gen_vel_mean": 65.63636363636364,
+      "shuf_vel_mean": 68.18181818181819
+    },
+    {
+      "n_notes": 36,
+      "gt_vel_mean": 95.94444444444444,
+      "gen_vel_mean": 115.88888888888889,
+      "shuf_vel_mean": 96.08333333333333
+    },
+    {
+      "n_notes": 11,
+      "gt_vel_mean": 111.9090909090909,
+      "gen_vel_mean": 105.63636363636364,
+      "shuf_vel_mean": 101.54545454545455
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 61.0,
+      "gen_vel_mean": 70.4,
+      "shuf_vel_mean": 60.6
+    },
+    {
+      "n_notes": 6,
+      "gt_vel_mean": 92.16666666666667,
+      "gen_vel_mean": 92.5,
+      "shuf_vel_mean": 86.0
+    },
+    {
+      "n_notes": 6,
+      "gt_vel_mean": 72.0,
+      "gen_vel_mean": 72.0,
+      "shuf_vel_mean": 89.16666666666667
+    },
+    {
+      "n_notes": 6,
+      "gt_vel_mean": 73.0,
+      "gen_vel_mean": 77.5,
+      "shuf_vel_mean": 91.33333333333333
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 87.28571428571429,
+      "gen_vel_mean": 87.57142857142857,
+      "shuf_vel_mean": 78.14285714285714
+    },
+    {
+      "n_notes": 40,
+      "gt_vel_mean": 71.7,
+      "gen_vel_mean": 70.175,
+      "shuf_vel_mean": 85.7
+    },
+    {
+      "n_notes": 11,
+      "gt_vel_mean": 87.54545454545455,
+      "gen_vel_mean": 92.54545454545455,
+      "shuf_vel_mean": 79.54545454545455
+    },
+    {
+      "n_notes": 2,
+      "gt_vel_mean": 76.0,
+      "gen_vel_mean": 92.0,
+      "shuf_vel_mean": 79.0
+    },
+    {
+      "n_notes": 10,
+      "gt_vel_mean": 84.1,
+      "gen_vel_mean": 80.4,
+      "shuf_vel_mean": 105.5
+    },
+    {
+      "n_notes": 11,
+      "gt_vel_mean": 57.81818181818182,
+      "gen_vel_mean": 58.18181818181818,
+      "shuf_vel_mean": 109.63636363636364
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 69.0,
+      "gen_vel_mean": 69.0,
+      "shuf_vel_mean": 88.6
+    },
+    {
+      "n_notes": 33,
+      "gt_vel_mean": 83.12121212121212,
+      "gen_vel_mean": 93.0,
+      "shuf_vel_mean": 55.24242424242424
+    },
+    {
+      "n_notes": 44,
+      "gt_vel_mean": 58.54545454545455,
+      "gen_vel_mean": 61.70454545454545,
+      "shuf_vel_mean": 50.34090909090909
+    },
+    {
+      "n_notes": 12,
+      "gt_vel_mean": 126.66666666666667,
+      "gen_vel_mean": 127.0,
+      "shuf_vel_mean": 55.0
+    },
+    {
+      "n_notes": 8,
+      "gt_vel_mean": 86.125,
+      "gen_vel_mean": 85.375,
+      "shuf_vel_mean": 108.0
+    },
+    {
+      "n_notes": 2,
+      "gt_vel_mean": 71.5,
+      "gen_vel_mean": 78.0,
+      "shuf_vel_mean": 78.0
+    },
+    {
+      "n_notes": 12,
+      "gt_vel_mean": 81.58333333333333,
+      "gen_vel_mean": 81.41666666666667,
+      "shuf_vel_mean": 67.5
+    },
+    {
+      "n_notes": 8,
+      "gt_vel_mean": 100.375,
+      "gen_vel_mean": 100.0,
+      "shuf_vel_mean": 89.25
+    },
+    {
+      "n_notes": 22,
+      "gt_vel_mean": 126.68181818181819,
+      "gen_vel_mean": 127.0,
+      "shuf_vel_mean": 90.5909090909091
+    },
+    {
+      "n_notes": 6,
+      "gt_vel_mean": 74.5,
+      "gen_vel_mean": 73.0,
+      "shuf_vel_mean": 19.0
+    },
+    {
+      "n_notes": 10,
+      "gt_vel_mean": 50.2,
+      "gen_vel_mean": 52.1,
+      "shuf_vel_mean": 75.4
+    },
+    {
+      "n_notes": 11,
+      "gt_vel_mean": 100.0,
+      "gen_vel_mean": 101.9090909090909,
+      "shuf_vel_mean": 127.0
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 76.0,
+      "gen_vel_mean": 77.6,
+      "shuf_vel_mean": 109.8
+    },
+    {
+      "n_notes": 3,
+      "gt_vel_mean": 73.66666666666667,
+      "gen_vel_mean": 77.33333333333333,
+      "shuf_vel_mean": 112.0
+    },
+    {
+      "n_notes": 12,
+      "gt_vel_mean": 111.5,
+      "gen_vel_mean": 120.91666666666667,
+      "shuf_vel_mean": 45.083333333333336
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 91.4,
+      "gen_vel_mean": 85.4,
+      "shuf_vel_mean": 109.0
+    },
+    {
+      "n_notes": 11,
+      "gt_vel_mean": 122.36363636363636,
+      "gen_vel_mean": 126.0,
+      "shuf_vel_mean": 46.81818181818182
+    },
+    {
+      "n_notes": 11,
+      "gt_vel_mean": 70.45454545454545,
+      "gen_vel_mean": 70.45454545454545,
+      "shuf_vel_mean": 57.36363636363637
+    },
+    {
+      "n_notes": 12,
+      "gt_vel_mean": 78.66666666666667,
+      "gen_vel_mean": 69.5,
+      "shuf_vel_mean": 80.66666666666667
+    },
+    {
+      "n_notes": 2,
+      "gt_vel_mean": 63.0,
+      "gen_vel_mean": 53.5,
+      "shuf_vel_mean": 62.0
+    },
+    {
+      "n_notes": 47,
+      "gt_vel_mean": 82.48936170212765,
+      "gen_vel_mean": 81.76595744680851,
+      "shuf_vel_mean": 101.63829787234043
+    },
+    {
+      "n_notes": 9,
+      "gt_vel_mean": 71.0,
+      "gen_vel_mean": 71.0,
+      "shuf_vel_mean": 61.22222222222222
+    },
+    {
+      "n_notes": 4,
+      "gt_vel_mean": 62.25,
+      "gen_vel_mean": 49.75,
+      "shuf_vel_mean": 19.0
+    },
+    {
+      "n_notes": 17,
+      "gt_vel_mean": 78.82352941176471,
+      "gen_vel_mean": 80.88235294117646,
+      "shuf_vel_mean": 88.11764705882354
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 79.42857142857143,
+      "gen_vel_mean": 120.28571428571429,
+      "shuf_vel_mean": 98.57142857142857
+    },
+    {
+      "n_notes": 20,
+      "gt_vel_mean": 85.0,
+      "gen_vel_mean": 85.0,
+      "shuf_vel_mean": 79.3
+    },
+    {
+      "n_notes": 13,
+      "gt_vel_mean": 81.53846153846153,
+      "gen_vel_mean": 49.69230769230769,
+      "shuf_vel_mean": 66.92307692307692
+    },
+    {
+      "n_notes": 10,
+      "gt_vel_mean": 91.2,
+      "gen_vel_mean": 104.0,
+      "shuf_vel_mean": 52.6
+    },
+    {
+      "n_notes": 2,
+      "gt_vel_mean": 86.0,
+      "gen_vel_mean": 81.5,
+      "shuf_vel_mean": 73.0
+    },
+    {
+      "n_notes": 3,
+      "gt_vel_mean": 80.33333333333333,
+      "gen_vel_mean": 73.33333333333333,
+      "shuf_vel_mean": 62.333333333333336
+    },
+    {
+      "n_notes": 72,
+      "gt_vel_mean": 90.77777777777777,
+      "gen_vel_mean": 96.25,
+      "shuf_vel_mean": 119.58333333333333
+    },
+    {
+      "n_notes": 1,
+      "gt_vel_mean": 77.0,
+      "gen_vel_mean": 72.0,
+      "shuf_vel_mean": 45.0
+    },
+    {
+      "n_notes": 71,
+      "gt_vel_mean": 86.12676056338029,
+      "gen_vel_mean": 111.08450704225352,
+      "shuf_vel_mean": 127.0
+    },
+    {
+      "n_notes": 6,
+      "gt_vel_mean": 72.33333333333333,
+      "gen_vel_mean": 77.33333333333333,
+      "shuf_vel_mean": 114.0
+    },
+    {
+      "n_notes": 18,
+      "gt_vel_mean": 80.66666666666667,
+      "gen_vel_mean": 84.88888888888889,
+      "shuf_vel_mean": 54.0
+    },
+    {
+      "n_notes": 10,
+      "gt_vel_mean": 73.6,
+      "gen_vel_mean": 68.0,
+      "shuf_vel_mean": 94.9
+    },
+    {
+      "n_notes": 29,
+      "gt_vel_mean": 101.65517241379311,
+      "gen_vel_mean": 99.13793103448276,
+      "shuf_vel_mean": 65.03448275862068
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 117.0,
+      "gen_vel_mean": 118.6,
+      "shuf_vel_mean": 98.2
+    },
+    {
+      "n_notes": 16,
+      "gt_vel_mean": 89.25,
+      "gen_vel_mean": 85.4375,
+      "shuf_vel_mean": 83.5
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 111.6,
+      "gen_vel_mean": 117.6,
+      "shuf_vel_mean": 63.6
+    },
+    {
+      "n_notes": 2,
+      "gt_vel_mean": 89.0,
+      "gen_vel_mean": 83.0,
+      "shuf_vel_mean": 73.0
+    },
+    {
+      "n_notes": 15,
+      "gt_vel_mean": 83.66666666666667,
+      "gen_vel_mean": 83.86666666666666,
+      "shuf_vel_mean": 64.0
+    },
+    {
+      "n_notes": 3,
+      "gt_vel_mean": 74.0,
+      "gen_vel_mean": 74.0,
+      "shuf_vel_mean": 113.66666666666667
+    },
+    {
+      "n_notes": 9,
+      "gt_vel_mean": 80.88888888888889,
+      "gen_vel_mean": 81.11111111111111,
+      "shuf_vel_mean": 73.33333333333333
+    },
+    {
+      "n_notes": 2,
+      "gt_vel_mean": 77.0,
+      "gen_vel_mean": 47.0,
+      "shuf_vel_mean": 66.5
+    },
+    {
+      "n_notes": 42,
+      "gt_vel_mean": 93.80952380952381,
+      "gen_vel_mean": 110.0,
+      "shuf_vel_mean": 95.5
+    },
+    {
+      "n_notes": 13,
+      "gt_vel_mean": 109.76923076923077,
+      "gen_vel_mean": 106.23076923076923,
+      "shuf_vel_mean": 114.23076923076923
+    },
+    {
+      "n_notes": 24,
+      "gt_vel_mean": 101.375,
+      "gen_vel_mean": 100.0,
+      "shuf_vel_mean": 67.33333333333333
+    },
+    {
+      "n_notes": 11,
+      "gt_vel_mean": 108.27272727272727,
+      "gen_vel_mean": 87.81818181818181,
+      "shuf_vel_mean": 93.54545454545455
+    },
+    {
+      "n_notes": 59,
+      "gt_vel_mean": 111.86440677966101,
+      "gen_vel_mean": 87.52542372881356,
+      "shuf_vel_mean": 107.59322033898304
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 71.0,
+      "gen_vel_mean": 71.0,
+      "shuf_vel_mean": 114.0
+    },
+    {
+      "n_notes": 27,
+      "gt_vel_mean": 71.92592592592592,
+      "gen_vel_mean": 71.88888888888889,
+      "shuf_vel_mean": 92.5925925925926
+    },
+    {
+      "n_notes": 8,
+      "gt_vel_mean": 115.625,
+      "gen_vel_mean": 114.5,
+      "shuf_vel_mean": 103.625
+    },
+    {
+      "n_notes": 12,
+      "gt_vel_mean": 69.58333333333333,
+      "gen_vel_mean": 67.91666666666667,
+      "shuf_vel_mean": 86.91666666666667
+    },
+    {
+      "n_notes": 47,
+      "gt_vel_mean": 87.06382978723404,
+      "gen_vel_mean": 85.42553191489361,
+      "shuf_vel_mean": 70.40425531914893
+    },
+    {
+      "n_notes": 21,
+      "gt_vel_mean": 78.61904761904762,
+      "gen_vel_mean": 77.9047619047619,
+      "shuf_vel_mean": 111.80952380952381
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 98.71428571428571,
+      "gen_vel_mean": 100.71428571428571,
+      "shuf_vel_mean": 91.42857142857143
+    },
+    {
+      "n_notes": 4,
+      "gt_vel_mean": 101.0,
+      "gen_vel_mean": 100.0,
+      "shuf_vel_mean": 59.75
+    },
+    {
+      "n_notes": 11,
+      "gt_vel_mean": 76.0,
+      "gen_vel_mean": 85.81818181818181,
+      "shuf_vel_mean": 90.0
+    },
+    {
+      "n_notes": 11,
+      "gt_vel_mean": 76.9090909090909,
+      "gen_vel_mean": 92.54545454545455,
+      "shuf_vel_mean": 66.0909090909091
+    },
+    {
+      "n_notes": 4,
+      "gt_vel_mean": 69.25,
+      "gen_vel_mean": 74.0,
+      "shuf_vel_mean": 74.5
+    },
+    {
+      "n_notes": 3,
+      "gt_vel_mean": 113.66666666666667,
+      "gen_vel_mean": 108.0,
+      "shuf_vel_mean": 48.0
+    },
+    {
+      "n_notes": 16,
+      "gt_vel_mean": 101.25,
+      "gen_vel_mean": 90.25,
+      "shuf_vel_mean": 60.25
+    },
+    {
+      "n_notes": 35,
+      "gt_vel_mean": 84.97142857142858,
+      "gen_vel_mean": 86.68571428571428,
+      "shuf_vel_mean": 59.542857142857144
+    },
+    {
+      "n_notes": 14,
+      "gt_vel_mean": 94.28571428571429,
+      "gen_vel_mean": 75.92857142857143,
+      "shuf_vel_mean": 77.28571428571429
+    },
+    {
+      "n_notes": 11,
+      "gt_vel_mean": 81.18181818181819,
+      "gen_vel_mean": 81.81818181818181,
+      "shuf_vel_mean": 81.36363636363636
+    },
+    {
+      "n_notes": 14,
+      "gt_vel_mean": 61.785714285714285,
+      "gen_vel_mean": 59.357142857142854,
+      "shuf_vel_mean": 72.42857142857143
+    },
+    {
+      "n_notes": 12,
+      "gt_vel_mean": 90.0,
+      "gen_vel_mean": 85.41666666666667,
+      "shuf_vel_mean": 84.16666666666667
+    },
+    {
+      "n_notes": 1,
+      "gt_vel_mean": 37.0,
+      "gen_vel_mean": 116.0,
+      "shuf_vel_mean": 86.0
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 66.85714285714286,
+      "gen_vel_mean": 82.28571428571429,
+      "shuf_vel_mean": 85.57142857142857
+    },
+    {
+      "n_notes": 15,
+      "gt_vel_mean": 86.0,
+      "gen_vel_mean": 86.0,
+      "shuf_vel_mean": 74.93333333333334
+    },
+    {
+      "n_notes": 23,
+      "gt_vel_mean": 85.73913043478261,
+      "gen_vel_mean": 80.04347826086956,
+      "shuf_vel_mean": 73.69565217391305
+    },
+    {
+      "n_notes": 3,
+      "gt_vel_mean": 83.66666666666667,
+      "gen_vel_mean": 83.66666666666667,
+      "shuf_vel_mean": 103.33333333333333
+    },
+    {
+      "n_notes": 8,
+      "gt_vel_mean": 112.625,
+      "gen_vel_mean": 115.875,
+      "shuf_vel_mean": 45.5
+    },
+    {
+      "n_notes": 24,
+      "gt_vel_mean": 82.25,
+      "gen_vel_mean": 90.83333333333333,
+      "shuf_vel_mean": 76.25
+    },
+    {
+      "n_notes": 48,
+      "gt_vel_mean": 49.395833333333336,
+      "gen_vel_mean": 55.395833333333336,
+      "shuf_vel_mean": 56.375
+    },
+    {
+      "n_notes": 38,
+      "gt_vel_mean": 66.60526315789474,
+      "gen_vel_mean": 69.73684210526316,
+      "shuf_vel_mean": 68.21052631578948
+    },
+    {
+      "n_notes": 21,
+      "gt_vel_mean": 101.23809523809524,
+      "gen_vel_mean": 100.33333333333333,
+      "shuf_vel_mean": 66.0
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 76.6,
+      "gen_vel_mean": 75.2,
+      "shuf_vel_mean": 96.4
+    },
+    {
+      "n_notes": 1,
+      "gt_vel_mean": 80.0,
+      "gen_vel_mean": 85.0,
+      "shuf_vel_mean": 74.0
+    },
+    {
+      "n_notes": 6,
+      "gt_vel_mean": 96.0,
+      "gen_vel_mean": 96.0,
+      "shuf_vel_mean": 54.5
+    },
+    {
+      "n_notes": 8,
+      "gt_vel_mean": 89.5,
+      "gen_vel_mean": 95.125,
+      "shuf_vel_mean": 121.75
+    },
+    {
+      "n_notes": 6,
+      "gt_vel_mean": 93.66666666666667,
+      "gen_vel_mean": 96.16666666666667,
+      "shuf_vel_mean": 88.5
+    },
+    {
+      "n_notes": 35,
+      "gt_vel_mean": 71.68571428571428,
+      "gen_vel_mean": 70.88571428571429,
+      "shuf_vel_mean": 100.77142857142857
+    },
+    {
+      "n_notes": 25,
+      "gt_vel_mean": 69.72,
+      "gen_vel_mean": 71.64,
+      "shuf_vel_mean": 85.44
+    },
+    {
+      "n_notes": 6,
+      "gt_vel_mean": 66.0,
+      "gen_vel_mean": 66.0,
+      "shuf_vel_mean": 87.16666666666667
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 64.28571428571429,
+      "gen_vel_mean": 75.28571428571429,
+      "shuf_vel_mean": 48.57142857142857
+    },
+    {
+      "n_notes": 2,
+      "gt_vel_mean": 111.0,
+      "gen_vel_mean": 113.5,
+      "shuf_vel_mean": 65.0
+    },
+    {
+      "n_notes": 4,
+      "gt_vel_mean": 108.5,
+      "gen_vel_mean": 106.0,
+      "shuf_vel_mean": 96.25
+    },
+    {
+      "n_notes": 13,
+      "gt_vel_mean": 97.46153846153847,
+      "gen_vel_mean": 93.3076923076923,
+      "shuf_vel_mean": 85.84615384615384
+    },
+    {
+      "n_notes": 2,
+      "gt_vel_mean": 88.0,
+      "gen_vel_mean": 84.0,
+      "shuf_vel_mean": 84.0
+    },
+    {
+      "n_notes": 8,
+      "gt_vel_mean": 86.25,
+      "gen_vel_mean": 78.25,
+      "shuf_vel_mean": 92.25
+    },
+    {
+      "n_notes": 9,
+      "gt_vel_mean": 97.55555555555556,
+      "gen_vel_mean": 105.55555555555556,
+      "shuf_vel_mean": 103.0
+    },
+    {
+      "n_notes": 4,
+      "gt_vel_mean": 93.75,
+      "gen_vel_mean": 109.25,
+      "shuf_vel_mean": 72.25
+    },
+    {
+      "n_notes": 3,
+      "gt_vel_mean": 102.0,
+      "gen_vel_mean": 97.0,
+      "shuf_vel_mean": 95.66666666666667
+    },
+    {
+      "n_notes": 11,
+      "gt_vel_mean": 71.63636363636364,
+      "gen_vel_mean": 77.27272727272727,
+      "shuf_vel_mean": 107.54545454545455
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 72.4,
+      "gen_vel_mean": 66.0,
+      "shuf_vel_mean": 90.4
+    },
+    {
+      "n_notes": 31,
+      "gt_vel_mean": 95.06451612903226,
+      "gen_vel_mean": 105.6774193548387,
+      "shuf_vel_mean": 73.29032258064517
+    },
+    {
+      "n_notes": 31,
+      "gt_vel_mean": 70.0,
+      "gen_vel_mean": 70.0,
+      "shuf_vel_mean": 85.96774193548387
+    },
+    {
+      "n_notes": 19,
+      "gt_vel_mean": 112.63157894736842,
+      "gen_vel_mean": 114.15789473684211,
+      "shuf_vel_mean": 66.89473684210526
+    },
+    {
+      "n_notes": 22,
+      "gt_vel_mean": 93.31818181818181,
+      "gen_vel_mean": 98.68181818181819,
+      "shuf_vel_mean": 85.63636363636364
+    },
+    {
+      "n_notes": 16,
+      "gt_vel_mean": 101.625,
+      "gen_vel_mean": 100.125,
+      "shuf_vel_mean": 69.4375
+    },
+    {
+      "n_notes": 8,
+      "gt_vel_mean": 96.0,
+      "gen_vel_mean": 90.625,
+      "shuf_vel_mean": 72.25
+    },
+    {
+      "n_notes": 3,
+      "gt_vel_mean": 94.0,
+      "gen_vel_mean": 97.33333333333333,
+      "shuf_vel_mean": 66.66666666666667
+    },
+    {
+      "n_notes": 4,
+      "gt_vel_mean": 55.5,
+      "gen_vel_mean": 58.0,
+      "shuf_vel_mean": 67.0
+    },
+    {
+      "n_notes": 16,
+      "gt_vel_mean": 81.625,
+      "gen_vel_mean": 81.625,
+      "shuf_vel_mean": 81.125
+    },
+    {
+      "n_notes": 8,
+      "gt_vel_mean": 65.625,
+      "gen_vel_mean": 68.0,
+      "shuf_vel_mean": 54.5
+    },
+    {
+      "n_notes": 11,
+      "gt_vel_mean": 51.81818181818182,
+      "gen_vel_mean": 46.18181818181818,
+      "shuf_vel_mean": 45.36363636363637
+    },
+    {
+      "n_notes": 33,
+      "gt_vel_mean": 94.3030303030303,
+      "gen_vel_mean": 92.15151515151516,
+      "shuf_vel_mean": 59.93939393939394
+    },
+    {
+      "n_notes": 10,
+      "gt_vel_mean": 86.6,
+      "gen_vel_mean": 87.4,
+      "shuf_vel_mean": 81.2
+    },
+    {
+      "n_notes": 26,
+      "gt_vel_mean": 88.8076923076923,
+      "gen_vel_mean": 87.57692307692308,
+      "shuf_vel_mean": 87.6923076923077
+    },
+    {
+      "n_notes": 1,
+      "gt_vel_mean": 69.0,
+      "gen_vel_mean": 64.0,
+      "shuf_vel_mean": 67.0
+    },
+    {
+      "n_notes": 8,
+      "gt_vel_mean": 118.75,
+      "gen_vel_mean": 120.5,
+      "shuf_vel_mean": 96.0
+    },
+    {
+      "n_notes": 8,
+      "gt_vel_mean": 72.25,
+      "gen_vel_mean": 72.25,
+      "shuf_vel_mean": 81.125
+    },
+    {
+      "n_notes": 19,
+      "gt_vel_mean": 123.57894736842105,
+      "gen_vel_mean": 76.0,
+      "shuf_vel_mean": 91.89473684210526
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 109.6,
+      "gen_vel_mean": 119.0,
+      "shuf_vel_mean": 87.2
+    },
+    {
+      "n_notes": 9,
+      "gt_vel_mean": 86.77777777777777,
+      "gen_vel_mean": 103.22222222222223,
+      "shuf_vel_mean": 100.33333333333333
+    },
+    {
+      "n_notes": 17,
+      "gt_vel_mean": 72.0,
+      "gen_vel_mean": 74.52941176470588,
+      "shuf_vel_mean": 111.0
+    },
+    {
+      "n_notes": 1,
+      "gt_vel_mean": 71.0,
+      "gen_vel_mean": 80.0,
+      "shuf_vel_mean": 74.0
+    },
+    {
+      "n_notes": 6,
+      "gt_vel_mean": 73.83333333333333,
+      "gen_vel_mean": 73.83333333333333,
+      "shuf_vel_mean": 75.33333333333333
+    },
+    {
+      "n_notes": 6,
+      "gt_vel_mean": 90.83333333333333,
+      "gen_vel_mean": 100.0,
+      "shuf_vel_mean": 101.16666666666667
+    },
+    {
+      "n_notes": 31,
+      "gt_vel_mean": 69.61290322580645,
+      "gen_vel_mean": 69.80645161290323,
+      "shuf_vel_mean": 89.0
+    },
+    {
+      "n_notes": 9,
+      "gt_vel_mean": 68.11111111111111,
+      "gen_vel_mean": 61.22222222222222,
+      "shuf_vel_mean": 101.66666666666667
+    },
+    {
+      "n_notes": 28,
+      "gt_vel_mean": 88.5,
+      "gen_vel_mean": 89.64285714285714,
+      "shuf_vel_mean": 117.85714285714286
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 114.4,
+      "gen_vel_mean": 111.0,
+      "shuf_vel_mean": 76.0
+    },
+    {
+      "n_notes": 9,
+      "gt_vel_mean": 94.44444444444444,
+      "gen_vel_mean": 95.55555555555556,
+      "shuf_vel_mean": 82.22222222222223
+    },
+    {
+      "n_notes": 24,
+      "gt_vel_mean": 70.16666666666667,
+      "gen_vel_mean": 73.33333333333333,
+      "shuf_vel_mean": 76.91666666666667
+    },
+    {
+      "n_notes": 9,
+      "gt_vel_mean": 109.33333333333333,
+      "gen_vel_mean": 111.44444444444444,
+      "shuf_vel_mean": 83.33333333333333
+    },
+    {
+      "n_notes": 10,
+      "gt_vel_mean": 74.3,
+      "gen_vel_mean": 72.8,
+      "shuf_vel_mean": 67.0
+    },
+    {
+      "n_notes": 4,
+      "gt_vel_mean": 76.0,
+      "gen_vel_mean": 76.0,
+      "shuf_vel_mean": 104.75
+    },
+    {
+      "n_notes": 8,
+      "gt_vel_mean": 67.0,
+      "gen_vel_mean": 68.0,
+      "shuf_vel_mean": 58.375
+    },
+    {
+      "n_notes": 20,
+      "gt_vel_mean": 98.55,
+      "gen_vel_mean": 109.0,
+      "shuf_vel_mean": 100.3
+    },
+    {
+      "n_notes": 17,
+      "gt_vel_mean": 102.88235294117646,
+      "gen_vel_mean": 99.17647058823529,
+      "shuf_vel_mean": 84.23529411764706
+    },
+    {
+      "n_notes": 6,
+      "gt_vel_mean": 59.833333333333336,
+      "gen_vel_mean": 59.333333333333336,
+      "shuf_vel_mean": 85.0
+    },
+    {
+      "n_notes": 4,
+      "gt_vel_mean": 65.5,
+      "gen_vel_mean": 109.5,
+      "shuf_vel_mean": 119.5
+    },
+    {
+      "n_notes": 37,
+      "gt_vel_mean": 102.02702702702703,
+      "gen_vel_mean": 109.97297297297297,
+      "shuf_vel_mean": 63.972972972972975
+    },
+    {
+      "n_notes": 9,
+      "gt_vel_mean": 61.0,
+      "gen_vel_mean": 57.0,
+      "shuf_vel_mean": 93.22222222222223
+    },
+    {
+      "n_notes": 33,
+      "gt_vel_mean": 126.24242424242425,
+      "gen_vel_mean": 127.0,
+      "shuf_vel_mean": 106.72727272727273
+    },
+    {
+      "n_notes": 2,
+      "gt_vel_mean": 80.0,
+      "gen_vel_mean": 127.0,
+      "shuf_vel_mean": 63.5
+    },
+    {
+      "n_notes": 2,
+      "gt_vel_mean": 81.5,
+      "gen_vel_mean": 83.0,
+      "shuf_vel_mean": 85.0
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 85.6,
+      "gen_vel_mean": 78.8,
+      "shuf_vel_mean": 74.0
+    },
+    {
+      "n_notes": 11,
+      "gt_vel_mean": 99.45454545454545,
+      "gen_vel_mean": 74.9090909090909,
+      "shuf_vel_mean": 71.18181818181819
+    },
+    {
+      "n_notes": 4,
+      "gt_vel_mean": 69.5,
+      "gen_vel_mean": 77.0,
+      "shuf_vel_mean": 73.0
+    },
+    {
+      "n_notes": 17,
+      "gt_vel_mean": 108.94117647058823,
+      "gen_vel_mean": 103.6470588235294,
+      "shuf_vel_mean": 88.3529411764706
+    },
+    {
+      "n_notes": 13,
+      "gt_vel_mean": 84.92307692307692,
+      "gen_vel_mean": 88.92307692307692,
+      "shuf_vel_mean": 64.76923076923077
+    },
+    {
+      "n_notes": 8,
+      "gt_vel_mean": 111.75,
+      "gen_vel_mean": 116.0,
+      "shuf_vel_mean": 99.75
+    },
+    {
+      "n_notes": 36,
+      "gt_vel_mean": 107.77777777777777,
+      "gen_vel_mean": 109.27777777777777,
+      "shuf_vel_mean": 99.05555555555556
+    },
+    {
+      "n_notes": 12,
+      "gt_vel_mean": 79.91666666666667,
+      "gen_vel_mean": 82.41666666666667,
+      "shuf_vel_mean": 65.83333333333333
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 105.57142857142857,
+      "gen_vel_mean": 107.0,
+      "shuf_vel_mean": 51.142857142857146
+    },
+    {
+      "n_notes": 30,
+      "gt_vel_mean": 110.93333333333334,
+      "gen_vel_mean": 111.8,
+      "shuf_vel_mean": 105.66666666666667
+    },
+    {
+      "n_notes": 10,
+      "gt_vel_mean": 82.0,
+      "gen_vel_mean": 82.0,
+      "shuf_vel_mean": 109.4
+    },
+    {
+      "n_notes": 8,
+      "gt_vel_mean": 66.375,
+      "gen_vel_mean": 63.375,
+      "shuf_vel_mean": 39.375
+    },
+    {
+      "n_notes": 18,
+      "gt_vel_mean": 99.16666666666667,
+      "gen_vel_mean": 98.5,
+      "shuf_vel_mean": 120.11111111111111
+    },
+    {
+      "n_notes": 8,
+      "gt_vel_mean": 51.5,
+      "gen_vel_mean": 52.875,
+      "shuf_vel_mean": 53.375
+    },
+    {
+      "n_notes": 8,
+      "gt_vel_mean": 115.0,
+      "gen_vel_mean": 115.0,
+      "shuf_vel_mean": 82.375
+    },
+    {
+      "n_notes": 3,
+      "gt_vel_mean": 72.66666666666667,
+      "gen_vel_mean": 73.0,
+      "shuf_vel_mean": 89.66666666666667
+    },
+    {
+      "n_notes": 4,
+      "gt_vel_mean": 102.5,
+      "gen_vel_mean": 98.75,
+      "shuf_vel_mean": 66.75
+    },
+    {
+      "n_notes": 23,
+      "gt_vel_mean": 78.21739130434783,
+      "gen_vel_mean": 79.34782608695652,
+      "shuf_vel_mean": 71.17391304347827
+    },
+    {
+      "n_notes": 16,
+      "gt_vel_mean": 61.8125,
+      "gen_vel_mean": 61.875,
+      "shuf_vel_mean": 71.9375
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 70.42857142857143,
+      "gen_vel_mean": 70.42857142857143,
+      "shuf_vel_mean": 83.85714285714286
+    },
+    {
+      "n_notes": 6,
+      "gt_vel_mean": 110.0,
+      "gen_vel_mean": 106.66666666666667,
+      "shuf_vel_mean": 105.83333333333333
+    },
+    {
+      "n_notes": 13,
+      "gt_vel_mean": 74.84615384615384,
+      "gen_vel_mean": 76.53846153846153,
+      "shuf_vel_mean": 100.6923076923077
+    },
+    {
+      "n_notes": 3,
+      "gt_vel_mean": 70.33333333333333,
+      "gen_vel_mean": 69.0,
+      "shuf_vel_mean": 126.66666666666667
+    },
+    {
+      "n_notes": 3,
+      "gt_vel_mean": 127.0,
+      "gen_vel_mean": 106.66666666666667,
+      "shuf_vel_mean": 77.33333333333333
+    },
+    {
+      "n_notes": 14,
+      "gt_vel_mean": 120.28571428571429,
+      "gen_vel_mean": 125.28571428571429,
+      "shuf_vel_mean": 87.78571428571429
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 98.57142857142857,
+      "gen_vel_mean": 101.57142857142857,
+      "shuf_vel_mean": 71.71428571428571
+    },
+    {
+      "n_notes": 31,
+      "gt_vel_mean": 106.96774193548387,
+      "gen_vel_mean": 106.58064516129032,
+      "shuf_vel_mean": 87.2258064516129
+    },
+    {
+      "n_notes": 30,
+      "gt_vel_mean": 59.93333333333333,
+      "gen_vel_mean": 54.4,
+      "shuf_vel_mean": 71.06666666666666
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 65.28571428571429,
+      "gen_vel_mean": 65.42857142857143,
+      "shuf_vel_mean": 89.0
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 71.6,
+      "gen_vel_mean": 94.8,
+      "shuf_vel_mean": 56.6
+    },
+    {
+      "n_notes": 32,
+      "gt_vel_mean": 66.375,
+      "gen_vel_mean": 64.9375,
+      "shuf_vel_mean": 90.9375
+    },
+    {
+      "n_notes": 28,
+      "gt_vel_mean": 38.357142857142854,
+      "gen_vel_mean": 39.964285714285715,
+      "shuf_vel_mean": 76.10714285714286
+    },
+    {
+      "n_notes": 9,
+      "gt_vel_mean": 100.22222222222223,
+      "gen_vel_mean": 105.22222222222223,
+      "shuf_vel_mean": 106.0
+    },
+    {
+      "n_notes": 6,
+      "gt_vel_mean": 69.83333333333333,
+      "gen_vel_mean": 69.83333333333333,
+      "shuf_vel_mean": 74.33333333333333
+    },
+    {
+      "n_notes": 10,
+      "gt_vel_mean": 107.3,
+      "gen_vel_mean": 113.0,
+      "shuf_vel_mean": 82.4
+    },
+    {
+      "n_notes": 15,
+      "gt_vel_mean": 92.6,
+      "gen_vel_mean": 95.26666666666667,
+      "shuf_vel_mean": 66.93333333333334
+    },
+    {
+      "n_notes": 23,
+      "gt_vel_mean": 92.1304347826087,
+      "gen_vel_mean": 90.0,
+      "shuf_vel_mean": 35.30434782608695
+    },
+    {
+      "n_notes": 8,
+      "gt_vel_mean": 115.25,
+      "gen_vel_mean": 122.125,
+      "shuf_vel_mean": 71.625
+    },
+    {
+      "n_notes": 12,
+      "gt_vel_mean": 82.83333333333333,
+      "gen_vel_mean": 90.58333333333333,
+      "shuf_vel_mean": 73.33333333333333
+    },
+    {
+      "n_notes": 14,
+      "gt_vel_mean": 105.07142857142857,
+      "gen_vel_mean": 102.14285714285714,
+      "shuf_vel_mean": 70.0
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 66.42857142857143,
+      "gen_vel_mean": 74.57142857142857,
+      "shuf_vel_mean": 68.14285714285714
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 74.14285714285714,
+      "gen_vel_mean": 55.142857142857146,
+      "shuf_vel_mean": 79.42857142857143
+    },
+    {
+      "n_notes": 9,
+      "gt_vel_mean": 78.66666666666667,
+      "gen_vel_mean": 75.66666666666667,
+      "shuf_vel_mean": 51.77777777777778
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 87.0,
+      "gen_vel_mean": 109.14285714285714,
+      "shuf_vel_mean": 53.714285714285715
+    },
+    {
+      "n_notes": 28,
+      "gt_vel_mean": 105.46428571428571,
+      "gen_vel_mean": 112.14285714285714,
+      "shuf_vel_mean": 107.17857142857143
+    },
+    {
+      "n_notes": 48,
+      "gt_vel_mean": 84.79166666666667,
+      "gen_vel_mean": 84.875,
+      "shuf_vel_mean": 90.0
+    },
+    {
+      "n_notes": 1,
+      "gt_vel_mean": 51.0,
+      "gen_vel_mean": 60.0,
+      "shuf_vel_mean": 106.0
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 78.42857142857143,
+      "gen_vel_mean": 95.0,
+      "shuf_vel_mean": 65.71428571428571
+    },
+    {
+      "n_notes": 14,
+      "gt_vel_mean": 59.57142857142857,
+      "gen_vel_mean": 59.714285714285715,
+      "shuf_vel_mean": 69.92857142857143
+    },
+    {
+      "n_notes": 2,
+      "gt_vel_mean": 65.5,
+      "gen_vel_mean": 63.0,
+      "shuf_vel_mean": 94.0
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 75.2,
+      "gen_vel_mean": 76.4,
+      "shuf_vel_mean": 64.0
+    },
+    {
+      "n_notes": 12,
+      "gt_vel_mean": 85.41666666666667,
+      "gen_vel_mean": 91.25,
+      "shuf_vel_mean": 66.25
+    },
+    {
+      "n_notes": 23,
+      "gt_vel_mean": 76.78260869565217,
+      "gen_vel_mean": 83.21739130434783,
+      "shuf_vel_mean": 66.82608695652173
+    },
+    {
+      "n_notes": 19,
+      "gt_vel_mean": 38.36842105263158,
+      "gen_vel_mean": 36.8421052631579,
+      "shuf_vel_mean": 86.15789473684211
+    },
+    {
+      "n_notes": 63,
+      "gt_vel_mean": 74.06349206349206,
+      "gen_vel_mean": 85.57142857142857,
+      "shuf_vel_mean": 66.06349206349206
+    },
+    {
+      "n_notes": 9,
+      "gt_vel_mean": 73.22222222222223,
+      "gen_vel_mean": 83.44444444444444,
+      "shuf_vel_mean": 92.55555555555556
+    },
+    {
+      "n_notes": 12,
+      "gt_vel_mean": 86.33333333333333,
+      "gen_vel_mean": 61.333333333333336,
+      "shuf_vel_mean": 71.41666666666667
+    },
+    {
+      "n_notes": 39,
+      "gt_vel_mean": 73.71794871794872,
+      "gen_vel_mean": 81.0,
+      "shuf_vel_mean": 89.8974358974359
+    },
+    {
+      "n_notes": 84,
+      "gt_vel_mean": 74.96428571428571,
+      "gen_vel_mean": 70.92857142857143,
+      "shuf_vel_mean": 82.29761904761905
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 106.42857142857143,
+      "gen_vel_mean": 101.85714285714286,
+      "shuf_vel_mean": 102.14285714285714
+    },
+    {
+      "n_notes": 6,
+      "gt_vel_mean": 67.0,
+      "gen_vel_mean": 66.66666666666667,
+      "shuf_vel_mean": 64.0
+    },
+    {
+      "n_notes": 6,
+      "gt_vel_mean": 88.0,
+      "gen_vel_mean": 73.66666666666667,
+      "shuf_vel_mean": 79.83333333333333
+    },
+    {
+      "n_notes": 8,
+      "gt_vel_mean": 121.5,
+      "gen_vel_mean": 113.5,
+      "shuf_vel_mean": 95.625
+    },
+    {
+      "n_notes": 11,
+      "gt_vel_mean": 89.27272727272727,
+      "gen_vel_mean": 82.36363636363636,
+      "shuf_vel_mean": 39.63636363636363
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 95.14285714285714,
+      "gen_vel_mean": 95.85714285714286,
+      "shuf_vel_mean": 89.85714285714286
+    },
+    {
+      "n_notes": 37,
+      "gt_vel_mean": 85.29729729729729,
+      "gen_vel_mean": 83.13513513513513,
+      "shuf_vel_mean": 111.16216216216216
+    },
+    {
+      "n_notes": 25,
+      "gt_vel_mean": 110.28,
+      "gen_vel_mean": 113.36,
+      "shuf_vel_mean": 72.4
+    },
+    {
+      "n_notes": 3,
+      "gt_vel_mean": 50.0,
+      "gen_vel_mean": 42.666666666666664,
+      "shuf_vel_mean": 60.666666666666664
+    },
+    {
+      "n_notes": 8,
+      "gt_vel_mean": 105.125,
+      "gen_vel_mean": 103.5,
+      "shuf_vel_mean": 123.0
+    },
+    {
+      "n_notes": 27,
+      "gt_vel_mean": 75.70370370370371,
+      "gen_vel_mean": 77.07407407407408,
+      "shuf_vel_mean": 94.70370370370371
+    },
+    {
+      "n_notes": 4,
+      "gt_vel_mean": 98.0,
+      "gen_vel_mean": 93.5,
+      "shuf_vel_mean": 106.5
+    },
+    {
+      "n_notes": 4,
+      "gt_vel_mean": 79.75,
+      "gen_vel_mean": 78.0,
+      "shuf_vel_mean": 82.0
+    },
+    {
+      "n_notes": 23,
+      "gt_vel_mean": 109.78260869565217,
+      "gen_vel_mean": 106.1304347826087,
+      "shuf_vel_mean": 70.56521739130434
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 90.85714285714286,
+      "gen_vel_mean": 89.42857142857143,
+      "shuf_vel_mean": 93.14285714285714
+    },
+    {
+      "n_notes": 36,
+      "gt_vel_mean": 106.16666666666667,
+      "gen_vel_mean": 92.05555555555556,
+      "shuf_vel_mean": 81.0
+    },
+    {
+      "n_notes": 6,
+      "gt_vel_mean": 103.0,
+      "gen_vel_mean": 103.33333333333333,
+      "shuf_vel_mean": 62.0
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 106.0,
+      "gen_vel_mean": 102.0,
+      "shuf_vel_mean": 49.8
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 80.0,
+      "gen_vel_mean": 81.0,
+      "shuf_vel_mean": 60.6
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 64.0,
+      "gen_vel_mean": 66.8,
+      "shuf_vel_mean": 64.0
+    },
+    {
+      "n_notes": 8,
+      "gt_vel_mean": 93.25,
+      "gen_vel_mean": 94.0,
+      "shuf_vel_mean": 70.625
+    },
+    {
+      "n_notes": 6,
+      "gt_vel_mean": 73.66666666666667,
+      "gen_vel_mean": 71.16666666666667,
+      "shuf_vel_mean": 72.66666666666667
+    },
+    {
+      "n_notes": 12,
+      "gt_vel_mean": 72.5,
+      "gen_vel_mean": 74.0,
+      "shuf_vel_mean": 89.5
+    },
+    {
+      "n_notes": 4,
+      "gt_vel_mean": 66.5,
+      "gen_vel_mean": 66.5,
+      "shuf_vel_mean": 53.0
+    },
+    {
+      "n_notes": 18,
+      "gt_vel_mean": 68.61111111111111,
+      "gen_vel_mean": 71.72222222222223,
+      "shuf_vel_mean": 76.0
+    },
+    {
+      "n_notes": 19,
+      "gt_vel_mean": 80.6842105263158,
+      "gen_vel_mean": 79.15789473684211,
+      "shuf_vel_mean": 96.89473684210526
+    },
+    {
+      "n_notes": 1,
+      "gt_vel_mean": 72.0,
+      "gen_vel_mean": 72.0,
+      "shuf_vel_mean": 109.0
+    },
+    {
+      "n_notes": 22,
+      "gt_vel_mean": 70.68181818181819,
+      "gen_vel_mean": 70.5,
+      "shuf_vel_mean": 72.0909090909091
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 74.85714285714286,
+      "gen_vel_mean": 73.42857142857143,
+      "shuf_vel_mean": 109.0
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 110.0,
+      "gen_vel_mean": 110.0,
+      "shuf_vel_mean": 99.2
+    },
+    {
+      "n_notes": 1,
+      "gt_vel_mean": 88.0,
+      "gen_vel_mean": 115.0,
+      "shuf_vel_mean": 69.0
+    },
+    {
+      "n_notes": 6,
+      "gt_vel_mean": 39.5,
+      "gen_vel_mean": 45.333333333333336,
+      "shuf_vel_mean": 110.66666666666667
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 109.14285714285714,
+      "gen_vel_mean": 108.0,
+      "shuf_vel_mean": 93.85714285714286
+    },
+    {
+      "n_notes": 4,
+      "gt_vel_mean": 109.25,
+      "gen_vel_mean": 127.0,
+      "shuf_vel_mean": 95.0
+    },
+    {
+      "n_notes": 2,
+      "gt_vel_mean": 102.0,
+      "gen_vel_mean": 104.0,
+      "shuf_vel_mean": 83.5
+    },
+    {
+      "n_notes": 18,
+      "gt_vel_mean": 72.0,
+      "gen_vel_mean": 76.5,
+      "shuf_vel_mean": 94.66666666666667
+    },
+    {
+      "n_notes": 4,
+      "gt_vel_mean": 73.0,
+      "gen_vel_mean": 73.0,
+      "shuf_vel_mean": 93.5
+    },
+    {
+      "n_notes": 38,
+      "gt_vel_mean": 53.76315789473684,
+      "gen_vel_mean": 50.973684210526315,
+      "shuf_vel_mean": 71.55263157894737
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 81.0,
+      "gen_vel_mean": 81.0,
+      "shuf_vel_mean": 96.8
+    },
+    {
+      "n_notes": 10,
+      "gt_vel_mean": 64.9,
+      "gen_vel_mean": 58.5,
+      "shuf_vel_mean": 90.3
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 80.0,
+      "gen_vel_mean": 82.0,
+      "shuf_vel_mean": 101.42857142857143
+    },
+    {
+      "n_notes": 1,
+      "gt_vel_mean": 83.0,
+      "gen_vel_mean": 127.0,
+      "shuf_vel_mean": 85.0
+    },
+    {
+      "n_notes": 18,
+      "gt_vel_mean": 110.55555555555556,
+      "gen_vel_mean": 113.33333333333333,
+      "shuf_vel_mean": 34.77777777777778
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 74.0,
+      "gen_vel_mean": 74.0,
+      "shuf_vel_mean": 72.2
+    },
+    {
+      "n_notes": 37,
+      "gt_vel_mean": 64.02702702702703,
+      "gen_vel_mean": 64.72972972972973,
+      "shuf_vel_mean": 60.513513513513516
+    },
+    {
+      "n_notes": 9,
+      "gt_vel_mean": 104.22222222222223,
+      "gen_vel_mean": 106.44444444444444,
+      "shuf_vel_mean": 93.33333333333333
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 67.4,
+      "gen_vel_mean": 67.8,
+      "shuf_vel_mean": 57.0
+    },
+    {
+      "n_notes": 6,
+      "gt_vel_mean": 80.5,
+      "gen_vel_mean": 74.0,
+      "shuf_vel_mean": 86.66666666666667
+    },
+    {
+      "n_notes": 12,
+      "gt_vel_mean": 95.0,
+      "gen_vel_mean": 96.0,
+      "shuf_vel_mean": 113.33333333333333
+    },
+    {
+      "n_notes": 20,
+      "gt_vel_mean": 33.35,
+      "gen_vel_mean": 74.1,
+      "shuf_vel_mean": 81.0
+    },
+    {
+      "n_notes": 4,
+      "gt_vel_mean": 95.25,
+      "gen_vel_mean": 96.25,
+      "shuf_vel_mean": 62.0
+    },
+    {
+      "n_notes": 3,
+      "gt_vel_mean": 55.0,
+      "gen_vel_mean": 66.66666666666667,
+      "shuf_vel_mean": 116.66666666666667
+    },
+    {
+      "n_notes": 32,
+      "gt_vel_mean": 99.46875,
+      "gen_vel_mean": 99.96875,
+      "shuf_vel_mean": 70.78125
+    },
+    {
+      "n_notes": 3,
+      "gt_vel_mean": 65.66666666666667,
+      "gen_vel_mean": 65.66666666666667,
+      "shuf_vel_mean": 115.66666666666667
+    },
+    {
+      "n_notes": 15,
+      "gt_vel_mean": 103.6,
+      "gen_vel_mean": 98.8,
+      "shuf_vel_mean": 110.2
+    },
+    {
+      "n_notes": 9,
+      "gt_vel_mean": 110.66666666666667,
+      "gen_vel_mean": 118.0,
+      "shuf_vel_mean": 100.88888888888889
+    },
+    {
+      "n_notes": 15,
+      "gt_vel_mean": 84.86666666666666,
+      "gen_vel_mean": 85.93333333333334,
+      "shuf_vel_mean": 85.0
+    },
+    {
+      "n_notes": 32,
+      "gt_vel_mean": 60.5625,
+      "gen_vel_mean": 51.5625,
+      "shuf_vel_mean": 73.71875
+    },
+    {
+      "n_notes": 44,
+      "gt_vel_mean": 108.9090909090909,
+      "gen_vel_mean": 111.31818181818181,
+      "shuf_vel_mean": 89.25
+    },
+    {
+      "n_notes": 10,
+      "gt_vel_mean": 101.4,
+      "gen_vel_mean": 103.7,
+      "shuf_vel_mean": 73.6
+    },
+    {
+      "n_notes": 6,
+      "gt_vel_mean": 64.0,
+      "gen_vel_mean": 65.0,
+      "shuf_vel_mean": 36.666666666666664
+    },
+    {
+      "n_notes": 3,
+      "gt_vel_mean": 85.66666666666667,
+      "gen_vel_mean": 68.33333333333333,
+      "shuf_vel_mean": 71.0
+    },
+    {
+      "n_notes": 1,
+      "gt_vel_mean": 109.0,
+      "gen_vel_mean": 118.0,
+      "shuf_vel_mean": 77.0
+    },
+    {
+      "n_notes": 13,
+      "gt_vel_mean": 86.38461538461539,
+      "gen_vel_mean": 87.38461538461539,
+      "shuf_vel_mean": 74.15384615384616
+    },
+    {
+      "n_notes": 11,
+      "gt_vel_mean": 60.45454545454545,
+      "gen_vel_mean": 60.18181818181818,
+      "shuf_vel_mean": 66.45454545454545
+    },
+    {
+      "n_notes": 1,
+      "gt_vel_mean": 100.0,
+      "gen_vel_mean": 127.0,
+      "shuf_vel_mean": 124.0
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 71.4,
+      "gen_vel_mean": 69.0,
+      "shuf_vel_mean": 125.0
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 73.71428571428571,
+      "gen_vel_mean": 73.42857142857143,
+      "shuf_vel_mean": 79.0
+    },
+    {
+      "n_notes": 9,
+      "gt_vel_mean": 73.11111111111111,
+      "gen_vel_mean": 69.55555555555556,
+      "shuf_vel_mean": 58.666666666666664
+    },
+    {
+      "n_notes": 6,
+      "gt_vel_mean": 60.166666666666664,
+      "gen_vel_mean": 77.5,
+      "shuf_vel_mean": 75.16666666666667
+    },
+    {
+      "n_notes": 6,
+      "gt_vel_mean": 57.666666666666664,
+      "gen_vel_mean": 57.333333333333336,
+      "shuf_vel_mean": 93.33333333333333
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 74.14285714285714,
+      "gen_vel_mean": 72.14285714285714,
+      "shuf_vel_mean": 81.42857142857143
+    },
+    {
+      "n_notes": 4,
+      "gt_vel_mean": 108.75,
+      "gen_vel_mean": 106.0,
+      "shuf_vel_mean": 96.25
+    },
+    {
+      "n_notes": 8,
+      "gt_vel_mean": 95.75,
+      "gen_vel_mean": 98.0,
+      "shuf_vel_mean": 125.75
+    },
+    {
+      "n_notes": 2,
+      "gt_vel_mean": 124.5,
+      "gen_vel_mean": 127.0,
+      "shuf_vel_mean": 50.0
+    },
+    {
+      "n_notes": 9,
+      "gt_vel_mean": 97.22222222222223,
+      "gen_vel_mean": 94.44444444444444,
+      "shuf_vel_mean": 66.33333333333333
+    },
+    {
+      "n_notes": 34,
+      "gt_vel_mean": 89.3529411764706,
+      "gen_vel_mean": 85.23529411764706,
+      "shuf_vel_mean": 50.529411764705884
+    },
+    {
+      "n_notes": 14,
+      "gt_vel_mean": 45.785714285714285,
+      "gen_vel_mean": 46.142857142857146,
+      "shuf_vel_mean": 87.78571428571429
+    },
+    {
+      "n_notes": 9,
+      "gt_vel_mean": 96.66666666666667,
+      "gen_vel_mean": 96.66666666666667,
+      "shuf_vel_mean": 55.0
+    },
+    {
+      "n_notes": 12,
+      "gt_vel_mean": 84.16666666666667,
+      "gen_vel_mean": 84.83333333333333,
+      "shuf_vel_mean": 112.5
+    },
+    {
+      "n_notes": 44,
+      "gt_vel_mean": 74.43181818181819,
+      "gen_vel_mean": 74.25,
+      "shuf_vel_mean": 54.56818181818182
+    },
+    {
+      "n_notes": 9,
+      "gt_vel_mean": 53.666666666666664,
+      "gen_vel_mean": 84.55555555555556,
+      "shuf_vel_mean": 85.44444444444444
+    },
+    {
+      "n_notes": 48,
+      "gt_vel_mean": 64.08333333333333,
+      "gen_vel_mean": 63.020833333333336,
+      "shuf_vel_mean": 87.125
+    },
+    {
+      "n_notes": 4,
+      "gt_vel_mean": 74.0,
+      "gen_vel_mean": 75.5,
+      "shuf_vel_mean": 66.5
+    },
+    {
+      "n_notes": 39,
+      "gt_vel_mean": 71.51282051282051,
+      "gen_vel_mean": 68.71794871794872,
+      "shuf_vel_mean": 73.92307692307692
+    },
+    {
+      "n_notes": 14,
+      "gt_vel_mean": 97.57142857142857,
+      "gen_vel_mean": 98.92857142857143,
+      "shuf_vel_mean": 78.21428571428571
+    },
+    {
+      "n_notes": 12,
+      "gt_vel_mean": 72.66666666666667,
+      "gen_vel_mean": 72.58333333333333,
+      "shuf_vel_mean": 65.91666666666667
+    },
+    {
+      "n_notes": 15,
+      "gt_vel_mean": 85.0,
+      "gen_vel_mean": 91.66666666666667,
+      "shuf_vel_mean": 81.33333333333333
+    },
+    {
+      "n_notes": 10,
+      "gt_vel_mean": 85.0,
+      "gen_vel_mean": 90.0,
+      "shuf_vel_mean": 104.9
+    },
+    {
+      "n_notes": 20,
+      "gt_vel_mean": 64.3,
+      "gen_vel_mean": 64.3,
+      "shuf_vel_mean": 71.2
+    },
+    {
+      "n_notes": 9,
+      "gt_vel_mean": 109.44444444444444,
+      "gen_vel_mean": 109.44444444444444,
+      "shuf_vel_mean": 69.0
+    },
+    {
+      "n_notes": 2,
+      "gt_vel_mean": 90.5,
+      "gen_vel_mean": 101.0,
+      "shuf_vel_mean": 103.5
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 69.4,
+      "gen_vel_mean": 72.0,
+      "shuf_vel_mean": 110.4
+    },
+    {
+      "n_notes": 58,
+      "gt_vel_mean": 95.74137931034483,
+      "gen_vel_mean": 98.17241379310344,
+      "shuf_vel_mean": 53.46551724137931
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 70.6,
+      "gen_vel_mean": 70.6,
+      "shuf_vel_mean": 111.2
+    },
+    {
+      "n_notes": 2,
+      "gt_vel_mean": 70.0,
+      "gen_vel_mean": 58.0,
+      "shuf_vel_mean": 68.5
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 70.0,
+      "gen_vel_mean": 70.0,
+      "shuf_vel_mean": 60.2
+    },
+    {
+      "n_notes": 8,
+      "gt_vel_mean": 98.125,
+      "gen_vel_mean": 99.875,
+      "shuf_vel_mean": 64.625
+    },
+    {
+      "n_notes": 2,
+      "gt_vel_mean": 55.0,
+      "gen_vel_mean": 58.0,
+      "shuf_vel_mean": 64.5
+    },
+    {
+      "n_notes": 8,
+      "gt_vel_mean": 65.875,
+      "gen_vel_mean": 66.25,
+      "shuf_vel_mean": 98.5
+    },
+    {
+      "n_notes": 10,
+      "gt_vel_mean": 54.4,
+      "gen_vel_mean": 51.7,
+      "shuf_vel_mean": 55.5
+    },
+    {
+      "n_notes": 10,
+      "gt_vel_mean": 104.9,
+      "gen_vel_mean": 106.7,
+      "shuf_vel_mean": 77.6
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 98.71428571428571,
+      "gen_vel_mean": 99.14285714285714,
+      "shuf_vel_mean": 72.28571428571429
+    },
+    {
+      "n_notes": 9,
+      "gt_vel_mean": 96.0,
+      "gen_vel_mean": 96.0,
+      "shuf_vel_mean": 65.77777777777777
+    },
+    {
+      "n_notes": 4,
+      "gt_vel_mean": 86.0,
+      "gen_vel_mean": 83.0,
+      "shuf_vel_mean": 113.5
+    },
+    {
+      "n_notes": 6,
+      "gt_vel_mean": 110.0,
+      "gen_vel_mean": 103.66666666666667,
+      "shuf_vel_mean": 107.0
+    },
+    {
+      "n_notes": 12,
+      "gt_vel_mean": 84.83333333333333,
+      "gen_vel_mean": 86.25,
+      "shuf_vel_mean": 79.91666666666667
+    },
+    {
+      "n_notes": 4,
+      "gt_vel_mean": 66.0,
+      "gen_vel_mean": 67.0,
+      "shuf_vel_mean": 85.75
+    },
+    {
+      "n_notes": 4,
+      "gt_vel_mean": 92.0,
+      "gen_vel_mean": 91.0,
+      "shuf_vel_mean": 88.0
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 74.28571428571429,
+      "gen_vel_mean": 69.85714285714286,
+      "shuf_vel_mean": 83.28571428571429
+    },
+    {
+      "n_notes": 8,
+      "gt_vel_mean": 102.0,
+      "gen_vel_mean": 100.0,
+      "shuf_vel_mean": 123.375
+    },
+    {
+      "n_notes": 3,
+      "gt_vel_mean": 70.33333333333333,
+      "gen_vel_mean": 74.0,
+      "shuf_vel_mean": 66.66666666666667
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 85.57142857142857,
+      "gen_vel_mean": 91.28571428571429,
+      "shuf_vel_mean": 85.0
+    },
+    {
+      "n_notes": 3,
+      "gt_vel_mean": 86.66666666666667,
+      "gen_vel_mean": 94.0,
+      "shuf_vel_mean": 98.0
+    },
+    {
+      "n_notes": 29,
+      "gt_vel_mean": 105.51724137931035,
+      "gen_vel_mean": 110.3103448275862,
+      "shuf_vel_mean": 92.89655172413794
+    },
+    {
+      "n_notes": 9,
+      "gt_vel_mean": 64.55555555555556,
+      "gen_vel_mean": 46.111111111111114,
+      "shuf_vel_mean": 81.77777777777777
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 87.42857142857143,
+      "gen_vel_mean": 91.85714285714286,
+      "shuf_vel_mean": 70.0
+    },
+    {
+      "n_notes": 16,
+      "gt_vel_mean": 70.9375,
+      "gen_vel_mean": 67.1875,
+      "shuf_vel_mean": 64.375
+    },
+    {
+      "n_notes": 9,
+      "gt_vel_mean": 105.11111111111111,
+      "gen_vel_mean": 99.66666666666667,
+      "shuf_vel_mean": 100.88888888888889
+    },
+    {
+      "n_notes": 13,
+      "gt_vel_mean": 109.07692307692308,
+      "gen_vel_mean": 108.84615384615384,
+      "shuf_vel_mean": 74.92307692307692
+    },
+    {
+      "n_notes": 15,
+      "gt_vel_mean": 77.73333333333333,
+      "gen_vel_mean": 86.2,
+      "shuf_vel_mean": 87.93333333333334
+    },
+    {
+      "n_notes": 6,
+      "gt_vel_mean": 64.66666666666667,
+      "gen_vel_mean": 65.33333333333333,
+      "shuf_vel_mean": 64.66666666666667
+    },
+    {
+      "n_notes": 12,
+      "gt_vel_mean": 84.0,
+      "gen_vel_mean": 89.5,
+      "shuf_vel_mean": 115.16666666666667
+    },
+    {
+      "n_notes": 4,
+      "gt_vel_mean": 116.25,
+      "gen_vel_mean": 121.25,
+      "shuf_vel_mean": 97.0
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 113.14285714285714,
+      "gen_vel_mean": 121.71428571428571,
+      "shuf_vel_mean": 87.28571428571429
+    },
+    {
+      "n_notes": 15,
+      "gt_vel_mean": 63.733333333333334,
+      "gen_vel_mean": 61.53333333333333,
+      "shuf_vel_mean": 87.06666666666666
+    },
+    {
+      "n_notes": 15,
+      "gt_vel_mean": 65.0,
+      "gen_vel_mean": 65.0,
+      "shuf_vel_mean": 99.6
+    },
+    {
+      "n_notes": 28,
+      "gt_vel_mean": 70.60714285714286,
+      "gen_vel_mean": 69.78571428571429,
+      "shuf_vel_mean": 68.82142857142857
+    },
+    {
+      "n_notes": 18,
+      "gt_vel_mean": 42.111111111111114,
+      "gen_vel_mean": 47.5,
+      "shuf_vel_mean": 100.16666666666667
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 79.85714285714286,
+      "gen_vel_mean": 113.71428571428571,
+      "shuf_vel_mean": 74.42857142857143
+    },
+    {
+      "n_notes": 24,
+      "gt_vel_mean": 89.91666666666667,
+      "gen_vel_mean": 91.5,
+      "shuf_vel_mean": 94.20833333333333
+    },
+    {
+      "n_notes": 23,
+      "gt_vel_mean": 79.43478260869566,
+      "gen_vel_mean": 74.3913043478261,
+      "shuf_vel_mean": 67.82608695652173
+    },
+    {
+      "n_notes": 31,
+      "gt_vel_mean": 99.90322580645162,
+      "gen_vel_mean": 102.35483870967742,
+      "shuf_vel_mean": 79.41935483870968
+    },
+    {
+      "n_notes": 8,
+      "gt_vel_mean": 92.25,
+      "gen_vel_mean": 88.375,
+      "shuf_vel_mean": 111.75
+    },
+    {
+      "n_notes": 2,
+      "gt_vel_mean": 88.5,
+      "gen_vel_mean": 87.5,
+      "shuf_vel_mean": 57.5
+    },
+    {
+      "n_notes": 16,
+      "gt_vel_mean": 63.125,
+      "gen_vel_mean": 64.5,
+      "shuf_vel_mean": 41.8125
+    },
+    {
+      "n_notes": 28,
+      "gt_vel_mean": 102.25,
+      "gen_vel_mean": 112.03571428571429,
+      "shuf_vel_mean": 72.92857142857143
+    },
+    {
+      "n_notes": 4,
+      "gt_vel_mean": 106.0,
+      "gen_vel_mean": 106.75,
+      "shuf_vel_mean": 127.0
+    },
+    {
+      "n_notes": 2,
+      "gt_vel_mean": 60.5,
+      "gen_vel_mean": 58.0,
+      "shuf_vel_mean": 50.0
+    },
+    {
+      "n_notes": 23,
+      "gt_vel_mean": 97.52173913043478,
+      "gen_vel_mean": 97.17391304347827,
+      "shuf_vel_mean": 71.78260869565217
+    },
+    {
+      "n_notes": 13,
+      "gt_vel_mean": 99.6923076923077,
+      "gen_vel_mean": 101.76923076923077,
+      "shuf_vel_mean": 33.0
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 71.4,
+      "gen_vel_mean": 73.0,
+      "shuf_vel_mean": 108.8
+    },
+    {
+      "n_notes": 2,
+      "gt_vel_mean": 97.0,
+      "gen_vel_mean": 96.0,
+      "shuf_vel_mean": 44.0
+    },
+    {
+      "n_notes": 24,
+      "gt_vel_mean": 60.5,
+      "gen_vel_mean": 57.125,
+      "shuf_vel_mean": 112.70833333333333
+    },
+    {
+      "n_notes": 25,
+      "gt_vel_mean": 98.04,
+      "gen_vel_mean": 108.16,
+      "shuf_vel_mean": 68.64
+    },
+    {
+      "n_notes": 31,
+      "gt_vel_mean": 54.25806451612903,
+      "gen_vel_mean": 49.54838709677419,
+      "shuf_vel_mean": 57.45161290322581
+    },
+    {
+      "n_notes": 1,
+      "gt_vel_mean": 71.0,
+      "gen_vel_mean": 71.0,
+      "shuf_vel_mean": 88.0
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 127.0,
+      "gen_vel_mean": 127.0,
+      "shuf_vel_mean": 61.4
+    },
+    {
+      "n_notes": 6,
+      "gt_vel_mean": 56.333333333333336,
+      "gen_vel_mean": 55.0,
+      "shuf_vel_mean": 120.33333333333333
+    },
+    {
+      "n_notes": 28,
+      "gt_vel_mean": 101.35714285714286,
+      "gen_vel_mean": 100.82142857142857,
+      "shuf_vel_mean": 80.53571428571429
+    },
+    {
+      "n_notes": 10,
+      "gt_vel_mean": 98.3,
+      "gen_vel_mean": 119.0,
+      "shuf_vel_mean": 103.2
+    },
+    {
+      "n_notes": 4,
+      "gt_vel_mean": 74.0,
+      "gen_vel_mean": 74.0,
+      "shuf_vel_mean": 73.25
+    },
+    {
+      "n_notes": 12,
+      "gt_vel_mean": 88.33333333333333,
+      "gen_vel_mean": 88.33333333333333,
+      "shuf_vel_mean": 62.25
+    },
+    {
+      "n_notes": 31,
+      "gt_vel_mean": 83.64516129032258,
+      "gen_vel_mean": 78.0,
+      "shuf_vel_mean": 86.58064516129032
+    },
+    {
+      "n_notes": 3,
+      "gt_vel_mean": 73.66666666666667,
+      "gen_vel_mean": 63.333333333333336,
+      "shuf_vel_mean": 89.0
+    },
+    {
+      "n_notes": 15,
+      "gt_vel_mean": 73.6,
+      "gen_vel_mean": 72.8,
+      "shuf_vel_mean": 73.86666666666666
+    },
+    {
+      "n_notes": 1,
+      "gt_vel_mean": 81.0,
+      "gen_vel_mean": 81.0,
+      "shuf_vel_mean": 82.0
+    },
+    {
+      "n_notes": 11,
+      "gt_vel_mean": 71.9090909090909,
+      "gen_vel_mean": 66.9090909090909,
+      "shuf_vel_mean": 90.45454545454545
+    },
+    {
+      "n_notes": 4,
+      "gt_vel_mean": 41.0,
+      "gen_vel_mean": 41.0,
+      "shuf_vel_mean": 111.0
+    },
+    {
+      "n_notes": 6,
+      "gt_vel_mean": 71.66666666666667,
+      "gen_vel_mean": 37.666666666666664,
+      "shuf_vel_mean": 106.5
+    },
+    {
+      "n_notes": 15,
+      "gt_vel_mean": 90.66666666666667,
+      "gen_vel_mean": 100.33333333333333,
+      "shuf_vel_mean": 93.33333333333333
+    },
+    {
+      "n_notes": 50,
+      "gt_vel_mean": 64.22,
+      "gen_vel_mean": 84.32,
+      "shuf_vel_mean": 68.64
+    },
+    {
+      "n_notes": 1,
+      "gt_vel_mean": 117.0,
+      "gen_vel_mean": 105.0,
+      "shuf_vel_mean": 71.0
+    },
+    {
+      "n_notes": 10,
+      "gt_vel_mean": 112.0,
+      "gen_vel_mean": 112.0,
+      "shuf_vel_mean": 89.8
+    },
+    {
+      "n_notes": 10,
+      "gt_vel_mean": 84.6,
+      "gen_vel_mean": 85.8,
+      "shuf_vel_mean": 99.9
+    },
+    {
+      "n_notes": 15,
+      "gt_vel_mean": 96.53333333333333,
+      "gen_vel_mean": 95.53333333333333,
+      "shuf_vel_mean": 105.53333333333333
+    },
+    {
+      "n_notes": 6,
+      "gt_vel_mean": 70.33333333333333,
+      "gen_vel_mean": 70.33333333333333,
+      "shuf_vel_mean": 80.5
+    },
+    {
+      "n_notes": 2,
+      "gt_vel_mean": 103.0,
+      "gen_vel_mean": 108.0,
+      "shuf_vel_mean": 115.0
+    },
+    {
+      "n_notes": 16,
+      "gt_vel_mean": 110.0625,
+      "gen_vel_mean": 109.6875,
+      "shuf_vel_mean": 111.75
+    },
+    {
+      "n_notes": 33,
+      "gt_vel_mean": 86.27272727272727,
+      "gen_vel_mean": 100.84848484848484,
+      "shuf_vel_mean": 67.0
+    },
+    {
+      "n_notes": 29,
+      "gt_vel_mean": 78.65517241379311,
+      "gen_vel_mean": 77.41379310344827,
+      "shuf_vel_mean": 123.58620689655173
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 85.0,
+      "gen_vel_mean": 80.4,
+      "shuf_vel_mean": 73.0
+    },
+    {
+      "n_notes": 1,
+      "gt_vel_mean": 73.0,
+      "gen_vel_mean": 73.0,
+      "shuf_vel_mean": 57.0
+    },
+    {
+      "n_notes": 16,
+      "gt_vel_mean": 48.6875,
+      "gen_vel_mean": 49.0,
+      "shuf_vel_mean": 67.875
+    },
+    {
+      "n_notes": 11,
+      "gt_vel_mean": 98.27272727272727,
+      "gen_vel_mean": 100.72727272727273,
+      "shuf_vel_mean": 96.18181818181819
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 114.2,
+      "gen_vel_mean": 118.0,
+      "shuf_vel_mean": 71.0
+    },
+    {
+      "n_notes": 13,
+      "gt_vel_mean": 92.76923076923077,
+      "gen_vel_mean": 90.76923076923077,
+      "shuf_vel_mean": 73.92307692307692
+    },
+    {
+      "n_notes": 6,
+      "gt_vel_mean": 82.83333333333333,
+      "gen_vel_mean": 102.66666666666667,
+      "shuf_vel_mean": 126.16666666666667
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 109.0,
+      "gen_vel_mean": 124.2,
+      "shuf_vel_mean": 68.0
+    },
+    {
+      "n_notes": 22,
+      "gt_vel_mean": 80.0,
+      "gen_vel_mean": 89.0,
+      "shuf_vel_mean": 123.77272727272727
+    },
+    {
+      "n_notes": 14,
+      "gt_vel_mean": 109.92857142857143,
+      "gen_vel_mean": 110.0,
+      "shuf_vel_mean": 102.85714285714286
+    },
+    {
+      "n_notes": 5,
+      "gt_vel_mean": 69.0,
+      "gen_vel_mean": 69.0,
+      "shuf_vel_mean": 76.0
+    },
+    {
+      "n_notes": 12,
+      "gt_vel_mean": 58.0,
+      "gen_vel_mean": 59.75,
+      "shuf_vel_mean": 72.66666666666667
+    },
+    {
+      "n_notes": 7,
+      "gt_vel_mean": 72.42857142857143,
+      "gen_vel_mean": 72.42857142857143,
+      "shuf_vel_mean": 91.0
+    }
+  ]
+}

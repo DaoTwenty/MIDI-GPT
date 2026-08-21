@@ -337,6 +337,7 @@ def validate_request(
 
     seen_ids: set[int] = set()
     has_infill = False
+    has_humanize = False
     has_anything_to_generate = False
     attr_sizes = analyzer.attribute_sizes() if analyzer is not None else {}
     # The analyzer exposes attributes under their *instance* names (e.g.
@@ -375,6 +376,14 @@ def validate_request(
         if tp.autoregressive and tp.ignore:
             raise RequestValidationError(
                 f"track_id={tp.id}: autoregressive and ignore are mutually exclusive"
+            )
+        if tp.humanize and tp.ignore:
+            raise RequestValidationError(
+                f"track_id={tp.id}: humanize and ignore are mutually exclusive"
+            )
+        if tp.humanize and tp.autoregressive:
+            raise RequestValidationError(
+                f"track_id={tp.id}: humanize and autoregressive are mutually exclusive"
             )
         if tp.ignore and tp.bars:
             raise RequestValidationError(f"track_id={tp.id}: ignored tracks must not specify bars")
@@ -417,18 +426,20 @@ def validate_request(
                     f"got {sorted(tp.bars)}"
                 )
 
-        # A bar cannot be both masked (future=True → MASK_BAR) and an infill
-        # target (bars_to_generate → FillInPlaceholder/FillInStart/FillInEnd).
+        # A bar cannot be both masked (future=True → MASK_BAR) and an infill or
+        # Humanize target (bars_to_generate → FillInPlaceholder/.../FillInEnd,
+        # or the HumanizeSkeletonStart/.../HumanizeStart/.../HumanizeEnd pair).
         # These states are mutually exclusive: the encoder resolves the conflict
-        # silently (infill wins), so we catch it here instead.
+        # silently (generation wins), so we catch it here instead.
         if not tp.autoregressive and not tp.ignore and tp.bars:
             masked_infill = [
                 b for b in tp.bars if b < nb_track and score.tracks[tp.id].bars[b].future
             ]
             if masked_infill:
+                mode = "Humanize" if tp.humanize else "infill"
                 raise RequestValidationError(
                     f"track_id={tp.id}: bars {masked_infill} are both marked as "
-                    f"masked (future=True) and requested for infill generation — "
+                    f"masked (future=True) and requested for {mode} generation — "
                     f"these states are mutually exclusive"
                 )
 
@@ -452,6 +463,10 @@ def validate_request(
             pass
         elif tp.autoregressive:
             has_anything_to_generate = True
+        elif tp.humanize:
+            if tp.bars:
+                has_humanize = True
+                has_anything_to_generate = True
         elif tp.bars:
             has_infill = True
             has_anything_to_generate = True
@@ -676,6 +691,11 @@ def validate_request(
     if has_infill and not getattr(encoder_config, "supports_infill", False):
         raise RequestValidationError(
             "request requires infill but encoder config has supports_infill=false"
+        )
+
+    if has_humanize and not getattr(encoder_config, "supports_humanize", False):
+        raise RequestValidationError(
+            "request requires humanize but encoder config has supports_humanize=false"
         )
 
     return GenerationRequest(tracks=request.tracks, config=cfg)

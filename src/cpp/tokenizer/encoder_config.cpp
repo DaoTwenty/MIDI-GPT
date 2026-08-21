@@ -25,6 +25,12 @@ static std::string to_string(TokenType t) {
         case TokenType::FillInPlaceholder: return "FillInPlaceholder";
         case TokenType::FillInStart: return "FillInStart";
         case TokenType::FillInEnd: return "FillInEnd";
+        case TokenType::HumanizeStart: return "HumanizeStart";
+        case TokenType::HumanizeEnd: return "HumanizeEnd";
+        case TokenType::HumanizeActive: return "HumanizeActive";
+        case TokenType::HumanizeSkeletonStart: return "HumanizeSkeletonStart";
+        case TokenType::HumanizeSkeletonEnd: return "HumanizeSkeletonEnd";
+        case TokenType::BarLevelVelocityRange: return "BarLevelVelocityRange";
         case TokenType::Header: return "Header";
         case TokenType::VelocityLevel: return "VelocityLevel";
         case TokenType::Genre: return "Genre";
@@ -105,6 +111,12 @@ static TokenType from_string(const std::string& s) {
     if (s == "FillInPlaceholder" || s == "TOKEN_FILL_IN_PLACEHOLDER") return TokenType::FillInPlaceholder;
     if (s == "FillInStart" || s == "TOKEN_FILL_IN_START") return TokenType::FillInStart;
     if (s == "FillInEnd" || s == "TOKEN_FILL_IN_END") return TokenType::FillInEnd;
+    if (s == "HumanizeStart" || s == "TOKEN_HUMANIZE_START") return TokenType::HumanizeStart;
+    if (s == "HumanizeEnd" || s == "TOKEN_HUMANIZE_END") return TokenType::HumanizeEnd;
+    if (s == "HumanizeActive" || s == "TOKEN_HUMANIZE_ACTIVE") return TokenType::HumanizeActive;
+    if (s == "HumanizeSkeletonStart" || s == "TOKEN_HUMANIZE_SKELETON_START") return TokenType::HumanizeSkeletonStart;
+    if (s == "HumanizeSkeletonEnd" || s == "TOKEN_HUMANIZE_SKELETON_END") return TokenType::HumanizeSkeletonEnd;
+    if (s == "BarLevelVelocityRange") return TokenType::BarLevelVelocityRange;
     if (s == "Header" || s == "TOKEN_HEADER") return TokenType::Header;
     if (s == "VelocityLevel" || s == "TOKEN_VELOCITY_LEVEL") return TokenType::VelocityLevel;
     if (s == "Genre" || s == "TOKEN_GENRE") return TokenType::Genre;
@@ -181,6 +193,7 @@ EncoderConfig EncoderConfig::from_json(const std::string& json_str) {
     if (j.contains("decode_resolution")) c.decode_resolution = j["decode_resolution"];
     if (j.contains("emit_delta_tokens")) c.emit_delta_tokens = j["emit_delta_tokens"];
     if (j.contains("supports_infill")) c.supports_infill = j["supports_infill"];
+    if (j.contains("supports_humanize")) c.supports_humanize = j["supports_humanize"];
     if (j.contains("supports_mask_bar_token")) c.supports_mask_bar_token = j["supports_mask_bar_token"];
     if (j.contains("velocity_sticky")) c.velocity_sticky = j["velocity_sticky"];
     if (j.contains("switchable_velocity"))    c.switchable_velocity    = j["switchable_velocity"];
@@ -293,8 +306,11 @@ void EncoderConfig::derive_token_domains() {
     // Delta microtiming tokens — gated on emit_delta_tokens (also implied by switchable_microtiming).
     if (emit_delta_tokens) {
         token_domains.push_back({TokenType::DeltaDirection, 2});
-        // half-resolution gives sub-tick precision for both ± directions
-        token_domains.push_back({TokenType::Delta, std::max(1, resolution / 2)});
+        // A signed round-to-nearest residual against the Pos-token grid can be
+        // as large as half a Pos cell (resolution/2, in Delta's own units of
+        // 1/resolution of one Pos cell) -- +1 for the magnitude-0 level, so
+        // the domain must cover 0..resolution/2 inclusive to be lossless.
+        token_domains.push_back({TokenType::Delta, std::max(1, resolution / 2 + 1)});
     }
 
     // Infill marker tokens.
@@ -302,6 +318,16 @@ void EncoderConfig::derive_token_domains() {
         token_domains.push_back({TokenType::FillInPlaceholder, 1});
         token_domains.push_back({TokenType::FillInStart,       1});
         token_domains.push_back({TokenType::FillInEnd,         1});
+    }
+
+    // Humanize marker tokens (deferred Velocity/Delta appendix for notes
+    // whose skeleton — pitch/onset/duration — was already emitted in place).
+    if (supports_humanize) {
+        token_domains.push_back({TokenType::HumanizeActive,        2});
+        token_domains.push_back({TokenType::HumanizeSkeletonStart, 1});
+        token_domains.push_back({TokenType::HumanizeSkeletonEnd,   1});
+        token_domains.push_back({TokenType::HumanizeStart,         1});
+        token_domains.push_back({TokenType::HumanizeEnd,           1});
     }
 
     // MaskBar token — one of several ways to mask a bar (alternatives:
@@ -337,6 +363,7 @@ std::string EncoderConfig::to_json() const {
     j["decode_resolution"]        = decode_resolution;
     j["emit_delta_tokens"]        = emit_delta_tokens;
     j["supports_infill"]          = supports_infill;
+    j["supports_humanize"]        = supports_humanize;
     j["supports_mask_bar_token"]  = supports_mask_bar_token;
     j["velocity_sticky"]          = velocity_sticky;
     j["switchable_velocity"]      = switchable_velocity;

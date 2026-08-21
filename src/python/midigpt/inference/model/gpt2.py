@@ -214,6 +214,30 @@ class GPT2LMHeadModel(TransformerLMBase):
         self.encoder_config: dict | None = None
         self.transformer = GPT2Transformer(cfg)
         self.lm_head = nn.Linear(cfg.n_embd, cfg.vocab_size, bias=False)
+        self._init_weights()
+
+    def _init_weights(self) -> None:
+        # GPT-2 paper init scheme (matches HF GPT2LMHeadModel._init_weights).
+        # Conv1D's own __init__ already sets std=0.02 as the base case for
+        # every Conv1D layer (c_attn/c_fc/c_proj included) -- nn.Embedding
+        # and nn.Linear don't go through Conv1D, so wte/wpe/lm_head were
+        # silently falling back to PyTorch's defaults (std=1.0 for
+        # Embedding; Kaiming-uniform for Linear), ~50x too wide relative to
+        # the rest of the network. On top of that, c_proj -- the projection
+        # that feeds directly into the residual stream -- needs an extra
+        # 1/sqrt(2*n_layer) scale-down so residual-stream variance doesn't
+        # compound across depth (2 residual adds per block: attn + mlp).
+        # Without either fix, rare-token embedding rows and deep c_proj
+        # layers are the two places large, batch-dependent gradient spikes
+        # come from even with clipping containing the immediate blast
+        # radius.
+        nn.init.normal_(self.transformer.wte.weight, std=0.02)
+        nn.init.normal_(self.transformer.wpe.weight, std=0.02)
+        nn.init.normal_(self.lm_head.weight, std=0.02)
+        proj_std = 0.02 / math.sqrt(2 * self.cfg.n_layer)
+        for name, p in self.named_parameters():
+            if name.endswith("c_proj.weight"):
+                nn.init.normal_(p, std=proj_std)
 
     # ------------------------------------------------------------------- #
     #  ModelBase interface

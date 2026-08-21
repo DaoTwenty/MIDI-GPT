@@ -29,12 +29,19 @@ static std::vector<int> resolve_infill(const std::vector<int>& raw,
         }
     }
 
-    // Rebuild: replace each FILL_IN_PLACEHOLDER with next fill block,
-    // stop before first FILL_IN_START
+    // Rebuild: replace each FILL_IN_PLACEHOLDER with the next fill block, and
+    // skip over the FILL_IN_START..FILL_IN_END appendix blocks entirely
+    // (already captured above). Anything after the last block — e.g. a
+    // trailing Humanize appendix, or PIECE_END — is preserved, not dropped.
     std::vector<int> out;
     size_t fill_idx = 0;
     for (size_t i = 0; i < raw.size(); ++i) {
-        if (raw[i] == fs) break;
+        if (raw[i] == fs) {
+            size_t j = i + 1;
+            while (j < raw.size() && raw[j] != fe) ++j;
+            i = j; // loop's ++i moves past FILL_IN_END (or off the end)
+            continue;
+        }
         if (raw[i] == ph && fill_idx < fills.size()) {
             out.insert(out.end(), fills[fill_idx].begin(), fills[fill_idx].end());
             fill_idx++;
@@ -45,10 +52,79 @@ static std::vector<int> resolve_infill(const std::vector<int>& raw,
     return out;
 }
 
+// Resolves Humanize appendix blocks: splices each note's withheld
+// VelocityLevel/[DeltaDirection]/[Delta] group — carried, in note order,
+// inside a HUMANIZE_START..HUMANIZE_END block after TrackEnd — back onto the
+// matching in-place skeleton note, bracketed there by
+// HUMANIZE_SKELETON_START..HUMANIZE_SKELETON_END. Unlike FillIn, the skeleton
+// content (pitch/onset/duration) is never hidden, so this is a splice-in
+// (before each NoteOnset/NotePitch token), not a placeholder replacement.
+static std::vector<int> resolve_humanize(const std::vector<int>& raw,
+                                         const Vocabulary& vocab) {
+    int sks = vocab.has(TokenType::HumanizeSkeletonStart) ? vocab.encode(TokenType::HumanizeSkeletonStart, 0) : -1;
+    int ske = vocab.has(TokenType::HumanizeSkeletonEnd) ? vocab.encode(TokenType::HumanizeSkeletonEnd, 0) : -1;
+    int hs  = vocab.has(TokenType::HumanizeStart) ? vocab.encode(TokenType::HumanizeStart, 0) : -1;
+    int he  = vocab.has(TokenType::HumanizeEnd) ? vocab.encode(TokenType::HumanizeEnd, 0) : -1;
+    if (sks < 0 || ske < 0 || hs < 0 || he < 0) return raw;
+
+    // Collect appendix blocks in encounter order; split each into per-note
+    // groups at VelocityLevel boundaries (VelocityLevel is always emitted
+    // in the appendix, so it's an unambiguous group-start marker).
+    std::vector<std::vector<std::vector<int>>> blocks;
+    for (size_t i = 0; i < raw.size(); ++i) {
+        if (raw[i] != hs) continue;
+        std::vector<std::vector<int>> groups;
+        for (size_t j = i + 1; j < raw.size() && raw[j] != he; ++j) {
+            auto [type, _] = vocab.decode(raw[j]);
+            if (type == TokenType::VelocityLevel) groups.emplace_back();
+            if (!groups.empty()) groups.back().push_back(raw[j]);
+        }
+        blocks.push_back(std::move(groups));
+    }
+    if (blocks.empty()) return raw;
+
+    std::vector<int> out;
+    size_t block_idx = 0, group_idx = 0;
+    bool in_skeleton = false;
+    for (size_t i = 0; i < raw.size(); ++i) {
+        int tok = raw[i];
+        if (tok == sks) {
+            in_skeleton = true;
+            group_idx = 0;
+            continue; // marker itself is dropped
+        }
+        if (tok == ske) {
+            in_skeleton = false;
+            block_idx++;
+            continue;
+        }
+        if (tok == hs) {
+            // Skip the whole appendix block — already captured above.
+            size_t j = i + 1;
+            while (j < raw.size() && raw[j] != he) ++j;
+            i = j;
+            continue;
+        }
+        if (in_skeleton) {
+            auto [type, _] = vocab.decode(tok);
+            if ((type == TokenType::NoteOnset || type == TokenType::NotePitch)
+                && block_idx < blocks.size() && group_idx < blocks[block_idx].size()) {
+                const auto& g = blocks[block_idx][group_idx];
+                out.insert(out.end(), g.begin(), g.end());
+                group_idx++;
+            }
+        }
+        out.push_back(tok);
+    }
+    return out;
+}
+
 Score Decoder::decode(const std::vector<int>& tokens) const {
     // Resolve multi-fill: replace FILL_IN_PLACEHOLDER with content from
-    // FILL_IN_START/END blocks if present in the token stream.
-    const std::vector<int>& resolved = resolve_infill(tokens, vocab_);
+    // FILL_IN_START/END blocks if present in the token stream. Then resolve
+    // Humanize: splice each HUMANIZE_START..END appendix note-group back onto
+    // its in-place HUMANIZE_SKELETON_START..END skeleton note.
+    std::vector<int> resolved = resolve_humanize(resolve_infill(tokens, vocab_), vocab_);
 
     Score score;
     score.resolution = vocab_.config().decode_resolution;
@@ -236,6 +312,14 @@ Score Decoder::decode(const std::vector<int>& tokens) const {
             // Infill tokens — handled at a higher level
             break;
 
+        case TokenType::HumanizeSkeletonStart:
+        case TokenType::HumanizeSkeletonEnd:
+        case TokenType::HumanizeStart:
+        case TokenType::HumanizeEnd:
+        case TokenType::HumanizeActive:
+            // Humanize tokens — resolved (spliced/stripped) before decode() runs.
+            break;
+
         // Attribute controls: preserve into track.attributes so encode→decode→encode
         // is a fixed point.
         //
@@ -312,6 +396,13 @@ Score Decoder::decode(const std::vector<int>& tokens) const {
             if (current_track && current_bar_idx >= 0)
                 current_track->attributes[
                     "bar_Tension_" + std::to_string(current_bar_idx)
+                ] = value;
+            break;
+
+        case TokenType::BarLevelVelocityRange:
+            if (current_track && current_bar_idx >= 0)
+                current_track->attributes[
+                    "bar_BarLevelVelocityRange_" + std::to_string(current_bar_idx)
                 ] = value;
             break;
 
