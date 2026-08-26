@@ -61,6 +61,8 @@ notes/
 output/
 wandb/
 site/
+checkpoints/
+Groove2Groove.pdf
 
 # Cluster-specific SLURM scripts and configs
 slurm/

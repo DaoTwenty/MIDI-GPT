@@ -407,6 +407,11 @@ class GenerationRequest:
     #                           (requires genre_groups configured in encoder config)
     # Raises RequestValidationError if the control is invalid or unsupported.
     controls: dict[str, Any] = field(default_factory=dict)
+    # Optional audio conditioning: list of (bar_frames, track_frames, position) tuples.
+    # bar_frames:  Tensor [1, feat_dim] — audio embedding for one AudioContext position
+    # track_frames: Tensor [1, feat_dim] — global track-level audio embedding
+    # position: int — index into the context token sequence where the AudioContext token sits
+    audio_conditioning: list[tuple[Any, Any, int]] | None = None
 
     @classmethod
     def from_dict(cls, d: dict) -> "GenerationRequest":
@@ -414,4 +419,5 @@ class GenerationRequest:
             tracks=[TrackPrompt.from_dict(t) for t in d["tracks"]],
             config=InferenceConfig.from_dict(d.get("config", {})),
             controls=dict(d.get("controls", {})),
+            audio_conditioning=d.get("audio_conditioning"),
         )

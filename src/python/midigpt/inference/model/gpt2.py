@@ -220,21 +220,55 @@ class GPT2LMHeadModel(TransformerLMBase):
     # ------------------------------------------------------------------- #
     def forward(
         self,
-        input_ids: torch.Tensor,
+        input_ids: torch.Tensor | None = None,
         past_kv: tuple[tuple[torch.Tensor, torch.Tensor], ...] | None = None,
         key_mask: torch.Tensor | None = None,
         position_ids: torch.Tensor | None = None,
+        inputs_embeds: torch.Tensor | None = None,
+        soft_token_replacements: dict[int, torch.Tensor] | list[tuple[int, torch.Tensor]] | None = None,
     ) -> tuple[torch.Tensor, tuple]:
-        B, T = input_ids.shape
+        if inputs_embeds is not None:
+            B, T, _ = inputs_embeds.shape
+            device = inputs_embeds.device
+            x = inputs_embeds.clone()
+        elif input_ids is not None:
+            B, T = input_ids.shape
+            device = input_ids.device
+            x = self.transformer.wte(input_ids)
+        else:
+            raise ValueError("Must provide either input_ids or inputs_embeds")
+
+        if soft_token_replacements is not None:
+            if isinstance(soft_token_replacements, dict):
+                for pos_idx, soft_emb in soft_token_replacements.items():
+                    if soft_emb.ndim == 2:
+                        x[:, pos_idx, :] = soft_emb
+                    elif soft_emb.ndim == 3:
+                        K = soft_emb.shape[1]
+                        x[:, pos_idx : pos_idx + K, :] = soft_emb
+            elif isinstance(soft_token_replacements, (list, tuple)):
+                for replacement in soft_token_replacements:
+                    if len(replacement) == 3:
+                        batch_idx, pos_idx, soft_emb = replacement
+                        target = x[batch_idx : batch_idx + 1]
+                    else:
+                        pos_idx, soft_emb = replacement
+                        target = x
+                    if soft_emb.ndim == 2:
+                        target[:, pos_idx, :] = soft_emb
+                    elif soft_emb.ndim == 3:
+                        K = soft_emb.shape[1]
+                        target[:, pos_idx : pos_idx + K, :] = soft_emb
+
         past_len = (
             past_kv[0][0].shape[2] if past_kv is not None and past_kv[0][0].shape[2] > 0 else 0
         )
         if position_ids is None:
-            pos = torch.arange(past_len, past_len + T, device=input_ids.device).unsqueeze(0)
+            pos = torch.arange(past_len, past_len + T, device=device).unsqueeze(0)
         else:
-            pos = position_ids.to(input_ids.device)
+            pos = position_ids.to(device)
 
-        x = self.transformer.wte(input_ids) + self.transformer.wpe(pos)
+        x = x + self.transformer.wpe(pos)
         presents = []
         for i, block in enumerate(self.transformer.h):
             pkv = past_kv[i] if past_kv is not None else None
@@ -260,6 +294,35 @@ class GPT2LMHeadModel(TransformerLMBase):
             )
             for _ in range(cfg.n_layer)
         )
+
+    def resize_token_embeddings(self, new_num_tokens: int) -> nn.Embedding:
+        """Resize input token embeddings and output lm_head to new_num_tokens.
+
+        Preserves existing pretrained weights and initializes newly added token
+        embeddings with Gaussian noise matching GPT-2 initialization.
+        """
+        old_num_tokens, n_embd = self.transformer.wte.weight.shape
+        if new_num_tokens == old_num_tokens:
+            return self.transformer.wte
+
+        # 1. Resize wte
+        new_wte = nn.Embedding(new_num_tokens, n_embd)
+        nn.init.normal_(new_wte.weight, std=0.02)
+        n_copy = min(old_num_tokens, new_num_tokens)
+        with torch.no_grad():
+            new_wte.weight[:n_copy] = self.transformer.wte.weight[:n_copy]
+        self.transformer.wte = new_wte
+
+        # 2. Resize lm_head
+        new_lm_head = nn.Linear(n_embd, new_num_tokens, bias=False)
+        nn.init.normal_(new_lm_head.weight, std=0.02)
+        with torch.no_grad():
+            new_lm_head.weight[:n_copy] = self.lm_head.weight[:n_copy]
+        self.lm_head = new_lm_head
+
+        # Update config
+        self.cfg.vocab_size = new_num_tokens
+        return self.transformer.wte
 
     def kv_length(self, past_kv) -> int:
         if past_kv is None or len(past_kv) == 0:

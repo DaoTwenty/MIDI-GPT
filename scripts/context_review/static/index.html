@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Context scenario review</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <h1>Context scenario review</h1>
+    <div class="bar">
+      <button id="btn-roll">New scenario</button>
+      <label>Replay seed: <input id="seed-input" type="number" min="0" placeholder="seed"></label>
+      <button id="btn-replay">Replay</button>
+      <label><input id="simple-toggle" type="checkbox"> Model view (context/masked/to-gen)</label>
+      <span class="spacer"></span>
+      <span id="status" class="status"></span>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>Scenario</h2>
+      <pre id="scenario-summary"></pre>
+    </section>
+
+    <section class="panel">
+      <h2>Grid</h2>
+      <div class="bar" id="playhead-bar">
+        <label>Playhead: <span id="playhead-val">0</span></label>
+        <input id="playhead-slider" type="range" min="0" max="0" value="0" step="1" style="flex:1; min-width:300px;">
+      </div>
+      <div id="grid-wrap"></div>
+      <div class="legend" id="legend"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Feedback</h2>
+      <textarea id="feedback" rows="6"
+        placeholder="What's right, what's wrong, what looks weird…"></textarea>
+      <div class="bar">
+        <button id="btn-save">Save feedback</button>
+        <span id="save-status" class="status"></span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Saved entries</h2>
+      <div id="history"></div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

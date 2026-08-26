@@ -57,7 +57,7 @@ prompt_drums_score = copy.deepcopy(score_for_drums)
 prompt_drums_score.to_midi("docs/assets/midi/prompt_sampling.mid")
 print("Saved prompt_sampling.mid")
 
-# 1. Sparse Drums
+# 1. Sparse Drums (Seed 42)
 print("Generating sparse drums...")
 req_sparse_drums = GenerationRequest(
     tracks=[
@@ -65,13 +65,13 @@ req_sparse_drums = GenerationRequest(
         TrackPrompt(id=1, bars=[], ignore=False),
         TrackPrompt(id=2, bars=list(range(8)), ignore=False, attributes={"note_density": 1})
     ],
-    config=InferenceConfig(model_dim=8, mask_mode="attention", seed=SEED, max_attempts=5, tracks_per_step=2)
+    config=InferenceConfig(model_dim=8, mask_mode="attention", seed=42, max_attempts=5, tracks_per_step=2)
 )
 res_sparse_drums = engine.session(score_for_drums, req_sparse_drums).run()
 res_sparse_drums.to_midi("docs/assets/midi/sampling_drums_sparse.mid")
 print("Saved sampling_drums_sparse.mid")
 
-# 2. Dense Drums
+# 2. Dense Drums (Seed 45)
 print("Generating dense drums...")
 req_dense_drums = GenerationRequest(
     tracks=[
@@ -79,7 +79,7 @@ req_dense_drums = GenerationRequest(
         TrackPrompt(id=1, bars=[], ignore=False),
         TrackPrompt(id=2, bars=list(range(8)), ignore=False, attributes={"note_density": 8})
     ],
-    config=InferenceConfig(model_dim=8, mask_mode="attention", seed=SEED, max_attempts=5, tracks_per_step=2)
+    config=InferenceConfig(model_dim=8, mask_mode="attention", seed=45, max_attempts=5, tracks_per_step=2)
 )
 res_dense_drums = engine.session(score_for_drums, req_dense_drums).run()
 res_dense_drums.to_midi("docs/assets/midi/sampling_drums_dense.mid")
@@ -117,7 +117,7 @@ prompt_cello_score = copy.deepcopy(score_for_cello)
 prompt_cello_score.to_midi("docs/assets/midi/prompt_bach.mid")
 print("Saved prompt_bach.mid")
 
-# 1. Staccato Cello Bassline (Seed 43)
+# 1. Staccato Cello Bassline (Seed 46)
 print("Generating staccato cello bassline...")
 req_staccato_cello = GenerationRequest(
     tracks=[
@@ -126,7 +126,7 @@ req_staccato_cello = GenerationRequest(
         TrackPrompt(id=2, bars=[], ignore=False),
         TrackPrompt(id=3, bars=list(range(8)), ignore=False, attributes={"max_polyphony": 0, "max_note_duration": 1})
     ],
-    config=InferenceConfig(model_dim=8, mask_mode="attention", seed=43, max_attempts=5, tracks_per_step=2)
+    config=InferenceConfig(model_dim=8, mask_mode="attention", seed=46, max_attempts=5, tracks_per_step=2)
 )
 res_staccato_cello = engine.session(score_for_cello, req_staccato_cello).run()
 res_staccato_cello.to_midi("docs/assets/midi/sampling_cello_staccato.mid")
@@ -150,28 +150,30 @@ print("Saved sampling_cello_sustained.mid")
 
 
 # --------------------------------------------------------------------------- #
-# Scenario 3: Bar Infilling — Everything In Its Right Place (Electronic)
+# Scenario 3: Bar Infilling — HOME Resonance (Electronic/Synthwave)
 # --------------------------------------------------------------------------- #
-print("\n--- Scenario 3: Keyboard Bar Infilling (Radiohead) ---")
-radiohead_score = Score.from_midi("tmp/midi_examples/EverythingIsInItsRightPlace.mid")
-radiohead_score = engine._tokenizer.normalize_input(radiohead_score)
-radiohead_slice = slice_score(radiohead_score, 16, 8) # bars 16-24
+print("\n--- Scenario 3: Keyboard Bar Infilling (HOME Resonance) ---")
+res_score = Score.from_midi("tmp/midi_examples/Home-Resonance-escafandro-20220516104213-nonstop2k.com.mid")
+res_score = engine._tokenizer.normalize_input(res_score)
+res_slice = slice_score(res_score, 48, 8) # bars 48-56
 
-# Keyboard is track 0. Bass is track 4. Drums is track 5.
-keyboard_track = copy.deepcopy(radiohead_slice.tracks[0])
-bass_context = copy.deepcopy(radiohead_slice.tracks[4])
-drums_context = copy.deepcopy(radiohead_slice.tracks[5])
+# Synth Lead is track 1. Synth Bass is track 3. Drums is track 0.
+keyboard_track = copy.deepcopy(res_slice.tracks[1])
+bass_context = copy.deepcopy(res_slice.tracks[3])
+drums_context = copy.deepcopy(res_slice.tracks[0])
 
 score_for_infill = Score(
     tracks=[keyboard_track, bass_context, drums_context],
-    resolution=radiohead_slice.resolution,
-    tempo=radiohead_slice.tempo
+    resolution=res_slice.resolution,
+    tempo=res_slice.tempo
 )
 
-# Clear middle bars 3 and 4 of the 8-bar slice to create the infill prompt
+# Clear middle bars 3 and 4 of the 8-bar slice to create the infill prompt (empty target bars)
+for bar_idx in [3, 4]:
+    score_for_infill.tracks[0].bars[bar_idx].notes = []
+
+# Save prompt
 infill_prompt = copy.deepcopy(score_for_infill)
-infill_prompt.tracks[0].bars[3].notes = []
-infill_prompt.tracks[0].bars[4].notes = []
 infill_prompt.to_midi("docs/assets/midi/prompt_infill.mid")
 print("Saved prompt_infill.mid")
 
@@ -179,7 +181,7 @@ print("Saved prompt_infill.mid")
 print("Generating sparse infill...")
 req_sparse_infill = GenerationRequest(
     tracks=[
-        TrackPrompt(id=0, bars=[3, 4], autoregressive=False, attributes={"min_polyphony": 0, "max_polyphony": 2}),
+        TrackPrompt(id=0, bars=[3, 4], autoregressive=False, attributes={"min_polyphony": 0, "max_polyphony": 6}),
         TrackPrompt(id=1, bars=[], ignore=False),
         TrackPrompt(id=2, bars=[], ignore=False)
     ],
@@ -193,7 +195,7 @@ print("Saved infill_sparse.mid")
 print("Generating chordal infill...")
 req_chordal_infill = GenerationRequest(
     tracks=[
-        TrackPrompt(id=0, bars=[3, 4], autoregressive=False, attributes={"min_polyphony": 1, "max_polyphony": 8}),
+        TrackPrompt(id=0, bars=[3, 4], autoregressive=False, attributes={"min_polyphony": 3, "max_polyphony": 9}),
         TrackPrompt(id=1, bars=[], ignore=False),
         TrackPrompt(id=2, bars=[], ignore=False)
     ],
@@ -230,7 +232,7 @@ for bar_idx in range(4, 8):
 ar_prompt_score.to_midi("docs/assets/midi/prompt_ar.mid")
 print("Saved prompt_ar.mid")
 
-# 1. Melodic Lead Continuation (Seed 42)
+# 1. Sparse Continuation (Seed 42)
 print("Generating melodic piano continuation...")
 req_monophonic_ar = GenerationRequest(
     tracks=[
@@ -301,7 +303,7 @@ res_sparse_harp = engine.session(score_for_harp, req_sparse_harp).run()
 res_sparse_harp.to_midi("docs/assets/midi/harp_monophonic.mid")
 print("Saved harp_monophonic.mid")
 
-# 2. Sustained Chords (Max Polyphony = 4, Seed 42)
+# 2. Slower Arpeggios (Max Polyphony = 4, Seed 101)
 print("Generating sustained chords harp continuation...")
 req_dense_harp = GenerationRequest(
     tracks=[
@@ -309,7 +311,7 @@ req_dense_harp = GenerationRequest(
         TrackPrompt(id=1, bars=[], ignore=False),
         TrackPrompt(id=2, bars=[4, 5, 6, 7], autoregressive=True, attributes={"max_polyphony": 4})
     ],
-    config=InferenceConfig(model_dim=8, mask_mode="attention", seed=42, max_attempts=5)
+    config=InferenceConfig(model_dim=8, mask_mode="attention", seed=101, max_attempts=5)
 )
 res_dense_harp = engine.session(score_for_harp, req_dense_harp).run()
 res_dense_harp.to_midi("docs/assets/midi/harp_chordal.mid")

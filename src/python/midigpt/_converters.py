@@ -15,11 +15,13 @@ def to_cpp(score: Score | _core.Score) -> _core.Score:
     for track in score.tracks:
         cpp_track = _core.Track()
         cpp_track.instrument = track.instrument
-        cpp_track.type = (
-            _core.TrackType.Drum
-            if getattr(track, "track_type", None) == "drum"
-            else _core.TrackType.Melodic
-        )
+        track_type = getattr(track, "track_type", None)
+        if track_type == "drum":
+            cpp_track.type = _core.TrackType.Drum
+        elif track_type == "audio":
+            cpp_track.type = _core.TrackType.Audio
+        else:
+            cpp_track.type = _core.TrackType.Melodic
         cpp_bars = []
         for bar in track.bars:
             cpp_bar = _core.Bar()
@@ -71,7 +73,7 @@ def from_cpp(cpp: _core.Score) -> Score:
             Track(
                 bars=bars,
                 instrument=ct.instrument,
-                track_type="drum" if ct.type == _core.TrackType.Drum else "melodic",
+                track_type="drum" if ct.type == _core.TrackType.Drum else "audio" if ct.type == _core.TrackType.Audio else "melodic",
                 attributes=dict(ct.attributes),
             )
         )

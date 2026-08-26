@@ -154,9 +154,11 @@ EncodeResult Encoder::encode_full(const Score& score,
         const auto& track = score.tracks[track_idx];
         bool is_drum = (track.type == TrackType::Drum);
 
-        // TRACK token: hardcoded 0 = melodic, 1 = drum.
+        // TRACK token: 0 = melodic, 1 = drum, 2 = audio.
         if (vocab_.has(TokenType::Track)) {
-            int val = is_drum ? 1 : 0;
+            int val = (track.type == TrackType::Drum) ? 1
+                    : (track.type == TrackType::Audio) ? 2
+                    : 0;
             tokens.push_back(clamp_encode(TokenType::Track, val));
         }
 
@@ -236,9 +238,23 @@ EncodeResult Encoder::encode_full(const Score& score,
             }
 
             // TIME_SIGNATURE
+            // For audio tracks, infer time signature from the first non-Audio
+            // track at the same bar index (all tracks share the same time sig
+            // per bar — enforced by preprocessing validation).
+            int ts_num = bar.ts_numerator;
+            int ts_den = bar.ts_denominator;
+            if (track.type == TrackType::Audio) {
+                for (const auto& other : score.tracks) {
+                    if (other.type != TrackType::Audio && bar_idx < static_cast<int>(other.bars.size())) {
+                        ts_num = other.bars[bar_idx].ts_numerator;
+                        ts_den = other.bars[bar_idx].ts_denominator;
+                        break;
+                    }
+                }
+            }
             if (vocab_.has(TokenType::TimeSig)) {
                 int mapped_ts = config.time_signatures
-                    ? config.time_signatures->encode(bar.ts_numerator, bar.ts_denominator)
+                    ? config.time_signatures->encode(ts_num, ts_den)
                     : 0;
                 tokens.push_back(clamp_encode(TokenType::TimeSig, mapped_ts));
             }
@@ -260,6 +276,10 @@ EncodeResult Encoder::encode_full(const Score& score,
             // Default masked-bar behaviour: emit MaskBar token.
             else if (bar.future && vocab_.has(TokenType::MaskBar)) {
                 tokens.push_back(vocab_.encode(TokenType::MaskBar, 0));
+            }
+            // Audio context track: emit [AudioContext] token instead of notes
+            else if (track.type == TrackType::Audio && vocab_.has(TokenType::AudioContext)) {
+                tokens.push_back(vocab_.encode(TokenType::AudioContext, 0));
             } else if (!is_infill) {
                 encode_bar_notes(tokens, score, bar, is_drum, config, clamp_encode, vocab_,
                                  eff_velocity, eff_microtiming);

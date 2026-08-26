@@ -12,34 +12,25 @@ import pyarrow.parquet as pq
 import midigpt._core as _core
 from midigpt._types import Score
 from midigpt.augmentation.mask_bar import MaskBar, MaskBarConfig
-from midigpt.augmentation.score_window import select_window
+from midigpt.augmentation.score_window import select_window, select_window_dispatch
 from midigpt.augmentation.transpose import Transpose
 from midigpt.augmentation.velocity import VelocityScale
 from midigpt.tokenizer.tokenizer import Tokenizer
 from midigpt.utils import cached_indices, file_cache_key
 
-# ── dataset filter ────────────────────────────────────────────────────────────
+
+# ---------------------------------------------------------------------------
+# Dataset filter — validates parquet rows against encoder constraints
+# ---------------------------------------------------------------------------
 
 
 def _metadata_valid_mask(parquet_path: str, min_bars: int, min_tracks: int) -> list[bool]:
-    """Metadata-only filter — no MIDI parsing (avoids C++ crashes on corrupt rows).
-
-    GigaMIDI parquet columns used:
-      num_tracks   — track count
-      total_notes  — excludes silent/empty files
-
-    Bar-count filtering requires parsing the score and is done in Phase 2.
-    """
+    """Metadata-only filter — no MIDI parsing (avoids C++ crashes on corrupt rows)."""
     import pyarrow.compute as pc
 
-    meta = pq.read_table(
-        parquet_path,
-        columns=["num_tracks", "total_notes"],
-    )
-
+    meta = pq.read_table(parquet_path, columns=["num_tracks", "total_notes"])
     m_tracks = pc.greater_equal(meta["num_tracks"], min_tracks).to_pylist()
     m_notes = pc.greater(meta["total_notes"], 0).to_pylist()
-
     return [t and n for t, n in zip(m_tracks, m_notes, strict=False)]
 
 
@@ -49,16 +40,7 @@ def _probe_chunk(
     valid_ts: frozenset[str] | None,
     min_bars: int = 1,
 ) -> list[int]:
-    """Parse and validate a chunk in a subprocess; bisect on segfault.
-
-    Checks:
-      - Score.from_bytes() succeeds (Python exceptions are tolerated — only
-        SIGSEGV kills the subprocess and triggers bisection).
-      - Every track has at least min_bars bars.
-      - If valid_ts is provided, every (ts_num/ts_den) in the parsed score is
-        in the allowed set.
-    """
-    import json
+    """Parse and validate a chunk in a subprocess; bisect on segfault."""
     import os
     import subprocess
     import sys
@@ -70,48 +52,43 @@ def _probe_chunk(
     ts_repr = repr(valid_ts_list)
     min_bars_repr = repr(min_bars)
 
-    script = "\n".join(
-        [
-            "import sys, json",
-            f"sys.path[:0] = {sys_path_repr}",
-            "import datasets as hf",
-            "from midigpt._types import Score",
-            f"_vts = {ts_repr}",
-            f"_min_bars = {min_bars_repr}",
-            "valid_ts = set(_vts) if _vts is not None else None",
-            f"data = hf.load_dataset('parquet', data_files={parquet_repr}, split='train')",
-            f"chunk = {chunk_repr}",
-            "ok = []",
-            "for i in chunk:",
-            "    try:",
-            "        score = Score.from_bytes(data[i]['music'])",
-            "        if not all(len(t.bars) >= _min_bars for t in score.tracks):",
-            "            continue",
-            "        if valid_ts is not None:",
-            "            ts_in = {str(b.ts_numerator)+'/'+str(b.ts_denominator) for t in score.tracks for b in t.bars}",
-            "            if not ts_in.issubset(valid_ts):",
-            "                continue",
-            "        ok.append(i)",
-            "    except Exception:",
-            "        ok.append(i)",
-            "print(json.dumps(ok))",
-        ]
-    )
+    script = "\n".join([
+        "import sys, json",
+        f"sys.path[:0] = {sys_path_repr}",
+        "import datasets as hf",
+        "from midigpt._types import Score",
+        f"_vts = {ts_repr}",
+        f"_min_bars = {min_bars_repr}",
+        "valid_ts = set(_vts) if _vts is not None else None",
+        f"data = hf.load_dataset('parquet', data_files={parquet_repr}, split='train')",
+        f"chunk = {chunk_repr}",
+        "ok = []",
+        "for i in chunk:",
+        "    try:",
+        "        score = Score.from_bytes(data[i]['music'])",
+        "        if not all(len(t.bars) >= _min_bars for t in score.tracks):",
+        "            continue",
+        "        if valid_ts is not None:",
+        "            ts_in = {str(b.ts_numerator)+'/'+str(b.ts_denominator) for t in score.tracks for b in t.bars}",
+        "            if not ts_in.issubset(valid_ts):",
+        "                continue",
+        "        ok.append(i)",
+        "    except Exception:",
+        "        ok.append(i)",
+        "print(json.dumps(ok))",
+    ])
 
     env = os.environ.copy()
     env["PYTHONPATH"] = ":".join(sys.path)
     result = subprocess.run(
         [sys.executable, "-c", script],
-        capture_output=True,
-        text=True,
-        timeout=120,
-        env=env,
+        capture_output=True, text=True, timeout=120, env=env,
     )
 
     if result.returncode == 0 and result.stdout.strip():
         return json.loads(result.stdout.strip())
     if len(chunk) == 1:
-        return []  # single index caused segfault — drop it
+        return []
     mid = len(chunk) // 2
     return _probe_chunk(parquet_path, chunk[:mid], valid_ts, min_bars) + _probe_chunk(
         parquet_path, chunk[mid:], valid_ts, min_bars
@@ -124,17 +101,12 @@ def _load_or_build_valid_indices(
     min_tracks: int,
     valid_time_sigs: frozenset[str] | None = None,
 ) -> list[int]:
-    """Two-phase filter: fast metadata check then subprocess parse+TS validation.
-
-    Cache key includes encoder time-signature hash so it invalidates when the
-    encoder changes.
-    """
+    """Two-phase filter: fast metadata check then subprocess parse+TS validation."""
     import numpy as np
 
     ts_key = (
         hashlib.md5("|".join(sorted(valid_time_sigs)).encode()).hexdigest()[:8]
-        if valid_time_sigs
-        else "nots"
+        if valid_time_sigs else "nots"
     )
     cache_file = cached_indices(
         file_cache_key(parquet_path, min_bars=min_bars, min_tracks=min_tracks, ts=ts_key)
@@ -145,379 +117,393 @@ def _load_or_build_valid_indices(
         print(f"  dataset filter: {len(valid)} valid rows loaded from cache")
         return valid
 
-    # Phase 1: fast metadata filter (pure pyarrow, no MIDI parsing)
     print("  dataset filter: phase 1 — metadata check…", flush=True)
     mask = _metadata_valid_mask(parquet_path, min_bars=min_bars, min_tracks=min_tracks)
     candidates = [i for i, v in enumerate(mask) if v]
     print(f"  dataset filter: {len(candidates)}/{len(mask)} pass metadata filter")
 
-    # Phase 2: parse + time-sig validation (subprocess-isolated to catch segfaults)
     print(f"  dataset filter: phase 2 — parse+TS validation ({len(candidates)} rows)…", flush=True)
     chunk_size = 500
     valid: list[int] = []
-    try:
-        from tqdm.auto import tqdm as _tqdm
-
-        it = _tqdm(range(0, len(candidates), chunk_size), desc="  parse+TS scan")
-    except ImportError:
-        it = range(0, len(candidates), chunk_size)
-    for start in it:
+    for start in range(0, len(candidates), chunk_size):
         chunk = candidates[start : start + chunk_size]
         valid.extend(_probe_chunk(parquet_path, chunk, valid_time_sigs, min_bars))
 
     dropped = len(candidates) - len(valid)
     print(f"  dataset filter: dropped {dropped} rows (parse errors / bad TS) — {len(valid)} kept")
     np.save(cache_file, np.array(valid, dtype=np.int64))
-    print("  dataset filter: saved to cache")
     return valid
 
 
-# ── schema for DatasetBuilder (preprocessed format) ───────────────────────────
-
-_SCORE_SCHEMA = pa.schema(
-    [
-        pa.field("resolution", pa.int32()),
-        pa.field("tempo", pa.int32()),
-        pa.field(
-            "tracks",
-            pa.list_(
-                pa.struct(
-                    [
-                        pa.field("instrument", pa.int32()),
-                        pa.field("track_type", pa.string()),
-                        pa.field(
-                            "bars",
-                            pa.list_(
-                                pa.struct(
-                                    [
-                                        pa.field("ts_numerator", pa.int32()),
-                                        pa.field("ts_denominator", pa.int32()),
-                                        pa.field("future", pa.bool_()),
-                                        pa.field(
-                                            "notes",
-                                            pa.list_(
-                                                pa.struct(
-                                                    [
-                                                        pa.field("pitch", pa.int32()),
-                                                        pa.field("velocity", pa.int32()),
-                                                        pa.field("onset_ticks", pa.int32()),
-                                                        pa.field("duration_ticks", pa.int32()),
-                                                        pa.field("delta", pa.int32()),
-                                                    ]
-                                                )
-                                            ),
-                                        ),
-                                    ]
-                                )
-                            ),
-                        ),
-                    ]
-                )
-            ),
-        ),
-    ]
-)
-
-
-class DatasetBuilder:
-    def build(
-        self, midi_paths: list[str], output_path: str, splits: dict[str, float] | None = None
-    ):
-        if splits is None:
-            splits = {"train": 0.9, "valid": 0.05, "test": 0.05}
-        scores = []
-        for path in midi_paths:
-            try:
-                score = Score.from_midi(path)
-                scores.append(score.to_dict())
-            except Exception:
-                pass
-        table = pa.Table.from_pylist(scores, schema=_SCORE_SCHEMA)
-        pq.write_table(table, output_path)
-
-
 def _resolve_paths(parquet_path: str | list[str]) -> list[str]:
-    """Expand a single path, glob pattern, or list to a sorted list of parquet paths."""
-    if isinstance(parquet_path, list):
-        return sorted(parquet_path)
-    expanded = sorted(_glob_mod.glob(parquet_path))
-    return expanded if expanded else [parquet_path]
+    """Expand globs and return a flat list of parquet file paths."""
+    if isinstance(parquet_path, str):
+        parquet_path = [parquet_path]
+    paths: list[str] = []
+    for p in parquet_path:
+        expanded = sorted(_glob_mod.glob(p)) if "*" in p else [p]
+        paths.extend(expanded)
+    return paths
 
 
-# ── static augments applied once per score before windowing ───────────────────
+# ---------------------------------------------------------------------------
+# Base class — shared pipeline for all MIDI-GPT training datasets
+# ---------------------------------------------------------------------------
 
-_TRANSPOSE = Transpose(range(-6, 7))
-_VELOCITY = VelocityScale((0.8, 1.2))
 
+class MidiGPTDatasetBase:
+    """Base dataset with the shared encode/label pipeline.
 
-class MidiGPTDataset:
-    """Training dataset with encoder-aware windowing, infill, and bar masking.
-
-    Per-sample pipeline:
-      1. Pitch/velocity augmentation on the full score (once).
-      2. Independently roll two decisions:
-           - is_infill  (infill_probability): encode with FillIn tokens.
-           - do_mask    (mask_bar_config.apply_probability): apply MASK_BAR.
-         These are independent. MaskBar is given the infill target bars so it
-         never marks an infill target as MASK_BAR (mutually exclusive states).
-      3. Retry loop over (n_bars, n_tracks) pairs:
-           - Infill overflow → step n_tracks down, then n_bars down; never
-             clip FillIn tokens.
-           - AR overflow → random-window clip (legacy behaviour).
-      4. Fallback: smallest window, 1 track, AR clip.
-
-    max_seq_len acts as a dataset-side cap and must not exceed the model's
-    positional budget (model.max_context()). Pass 0 to use the encoder's
-    largest num_bars_map entry as an implicit limit.
+    Subclasses override:
+      - ``_load_score(idx)``         → Score (from parquet, in-memory, etc.)
+      - ``prepare_score(score, …)``  → (score, is_infill, infill_bars, **extra)
+        Called after window selection.  Adds audio-track assignment, feature
+        extraction, pitch augmentation, etc.  Must return the (possibly
+        mutated) score plus any extra keyword args to pass to ``_encode``.
+      - ``_encode(…)``              → dict  (token_ids, labels, extra fields)
+        Called after encoding.  Adds audio_bar_positions, context frames, etc.
     """
+
+    def __init__(
+        self,
+        tokenizer: Tokenizer,
+        num_bars_choices: list[int],
+        infill_prob: float,
+        infill_bar_fraction: float,
+        max_seq_len: int,
+        max_tracks: int,
+        min_tracks: int,
+        min_fill_ratio: float,
+        window_selection: str,
+        temperature: float,
+        mask_bar_config: MaskBarConfig | None = None,
+        velocity_off_prob: float = 0.0,
+        microtiming_off_prob: float = 0.0,
+        genre_probability: float = 1.0,
+    ):
+        self._tokenizer = tokenizer
+        self._num_bars_choices = num_bars_choices
+        self._infill_prob = infill_prob
+        self._infill_frac = infill_bar_fraction
+        self._max_seq_len = max_seq_len
+        self._max_tracks = max_tracks
+        self._min_tracks = min_tracks
+        self._min_fill_ratio = min_fill_ratio
+        self._window_selection = window_selection
+        self._temperature = temperature
+        self._mask_cfg = mask_bar_config
+        self._velocity_off_prob = velocity_off_prob
+        self._microtyping_off_prob = microtiming_off_prob
+        self._genre_probability = genre_probability
+        self._transpose_range = (-6, 6)
+        self._velocity_range = (0.8, 1.2)
+
+        cfg_dict = json.loads(tokenizer._vocab.config().to_json())
+        raw_map = cfg_dict.get("num_bars_map") or [4]
+        self._num_bars_choices = sorted(set(int(x) for x in raw_map), reverse=True)
+
+        self._switchable_velocity = bool(cfg_dict.get("switchable_velocity", False))
+        self._switchable_microtiming = bool(cfg_dict.get("switchable_microtiming", False))
+        self._genre_grouping = tokenizer._vocab.config().genre_grouping
+
+    # --- Abstract methods (subclasses must implement) ---
+
+    def _load_score(self, idx: int) -> Score:
+        raise NotImplementedError
+
+    def prepare_score(
+        self, score: Score, is_infill: bool, infill_bar_indices: set[int], idx: int,
+    ) -> tuple[Score, set[int], dict]:
+        """Hook for subclasses to augment/mutate the score before encoding.
+
+        Returns (score, infill_bar_indices, extra) where extra is merged into
+        the output dict.  Default: no-op.
+        """
+        return score, infill_bar_indices, {}
+
+    def _encode_hook(
+        self, token_ids: list[int], is_infill: bool, idx: int, **extra,
+    ) -> dict:
+        """Hook for subclasses to add audio_bar_positions, context frames, etc.
+
+        Called after encoding and label creation.  Return a dict of extra
+        fields to merge into the output.  Default: no-op.
+        """
+        return {}
+
+    # --- Shared pipeline ---
+
+    def _getitem_inner(self, idx: int) -> dict:
+        score = self._load_score(idx)
+
+        score = Transpose(range(self._transpose_range[0], self._transpose_range[1] + 1))(score)
+        score = VelocityScale(self._velocity_range)(score)
+
+        is_infill = random.random() < self._infill_prob
+        do_mask = self._mask_cfg is not None
+
+        # --- Window selection ---
+        window = None
+        if self._window_selection in ("uniform", "weighted"):
+            window = select_window_dispatch(
+                score,
+                mode=self._window_selection,
+                num_bars_choices=self._num_bars_choices,
+                max_tracks=self._max_tracks,
+                min_tracks=self._min_tracks,
+                min_fill_ratio=self._min_fill_ratio,
+                temperature=self._temperature,
+            )
+        if window is None:
+            initial = random.choice(self._num_bars_choices)
+            fallbacks = sorted([n for n in self._num_bars_choices if n < initial], reverse=True)
+            for n_bars in [initial, *fallbacks]:
+                for n_tracks in range(self._max_tracks, self._min_tracks - 1, -1):
+                    window = select_window(score, n_bars, n_tracks, self._min_fill_ratio)
+                    if window is not None:
+                        break
+                if window is not None:
+                    break
+        if window is None:
+            window = select_window(
+                score, self._num_bars_choices[-1], self._min_tracks, self._min_fill_ratio
+            )
+        if window is None:
+            raise ValueError(f"Sample {idx}: no valid window found")
+
+        num_bars = max((len(t.bars) for t in window.tracks), default=0)
+
+        # --- Infill bar selection ---
+        infill_bar_indices: set[int] = set()
+        if is_infill:
+            p = random.uniform(0.0, self._infill_frac)
+            infill_bar_indices = {
+                b_idx
+                for b_idx in range(num_bars)
+                if random.random() < p
+            }
+            if not infill_bar_indices:
+                infill_bar_indices = {random.randrange(num_bars)}
+
+        # --- Subclass hook: prepare score (audio assignment, features, etc.) ---
+        window, infill_bar_indices, extra = self.prepare_score(
+            window, is_infill, infill_bar_indices, idx
+        )
+
+        if do_mask:
+            window = MaskBar(self._mask_cfg, infill_bars=infill_bar_indices)(window)
+
+        # --- Encode ---
+        encode_opts = _core.EncodeOptions()
+        if is_infill and infill_bar_indices:
+            encode_opts.multi_fill = {
+                (t_idx, b_idx)
+                for t_idx in range(len(window.tracks))
+                for b_idx in infill_bar_indices
+            }
+        if self._switchable_velocity and self._velocity_off_prob > 0.0:
+            encode_opts.use_velocity = 0 if random.random() < self._velocity_off_prob else 1
+        if self._switchable_microtiming and self._microtyping_off_prob > 0.0:
+            encode_opts.use_microtiming = 0 if random.random() < self._microtyping_off_prob else 1
+        encode_opts.genre = self._genre_token(idx)
+        token_ids = self._tokenizer.encode(window, opts=encode_opts)
+
+        if is_infill and len(token_ids) > self._max_seq_len:
+            raise ValueError(
+                f"Sample {idx}: infill tokens exceed max_seq_len "
+                f"({len(token_ids)} > {self._max_seq_len})"
+            )
+
+        # --- Labels ---
+        labels = self._create_labels(token_ids, is_infill, extra.get("has_audio_tracks", False))
+
+        # --- Subclass hook: audio positions, context frames, etc. ---
+        extra_fields = self._encode_hook(token_ids, is_infill, idx, **extra)
+
+        token_ids = token_ids[: self._max_seq_len]
+        labels = labels[: self._max_seq_len]
+
+        result = {
+            "input_ids": token_ids,
+            "labels": labels,
+            "is_infill": is_infill,
+        }
+        result.update(extra_fields)
+        return result
+
+    def _create_labels(
+        self, token_ids: list[int], is_infill: bool, has_audio_tracks: bool,
+    ) -> list[int]:
+        """Create labels: -100 for context/soft tokens, active for loss targets.
+
+        When has_audio_tracks is True, audio track tokens are masked to -100
+        since audio tracks are context-only and never generation targets.
+        """
+        if not has_audio_tracks:
+            return list(token_ids)
+
+        labels = [-100] * len(token_ids)
+        track_token_ids = {
+            self._tokenizer._vocab.encode_val(_core.TokenType.Track, v)
+            for v in range(self._tokenizer._vocab.domain_size(_core.TokenType.Track))
+        }
+        track_end_token = (
+            self._tokenizer._vocab.encode_val(_core.TokenType.TrackEnd, 0)
+            if self._tokenizer._vocab.has(_core.TokenType.TrackEnd) else None
+        )
+
+        if is_infill:
+            vocab = self._tokenizer._vocab
+            if vocab.has(_core.TokenType.FillInStart):
+                fill_start_token = vocab.encode_val(_core.TokenType.FillInStart, 0)
+                try:
+                    fill_start_idx = token_ids.index(fill_start_token)
+                    in_audio_track = False
+                    for i in range(fill_start_idx + 1, len(token_ids)):
+                        if token_ids[i] in track_token_ids:
+                            in_audio_track = True
+                        elif token_ids[i] == track_end_token:
+                            in_audio_track = False
+                        if not in_audio_track:
+                            labels[i] = token_ids[i]
+                except ValueError:
+                    pass
+        else:
+            in_audio_track = False
+            for i in range(len(token_ids)):
+                if token_ids[i] in track_token_ids:
+                    in_audio_track = True
+                elif token_ids[i] == track_end_token:
+                    in_audio_track = False
+                if not in_audio_track:
+                    labels[i] = token_ids[i]
+
+        return labels
+
+    def _genre_token(self, idx: int) -> int:
+        """Return genre token id, or -1 if none/disabled."""
+        if self._genre_grouping is None or self._genre_probability <= 0.0:
+            return -1
+        if random.random() > self._genre_probability:
+            return -1
+        try:
+            genre = self._data[idx].get("music_style_scraped", "")
+            if genre and self._genre_grouping.contains(genre):
+                return self._genre_grouping.encode(genre)
+        except Exception:
+            pass
+        return -1
+
+
+# ---------------------------------------------------------------------------
+# Parquet dataset (GigaMIDI / similar)
+# ---------------------------------------------------------------------------
+
+
+class MidiGPTDataset(MidiGPTDatasetBase):
+    """MIDI-only training dataset loaded from parquet."""
 
     def __init__(
         self,
         parquet_path: str | list[str],
         tokenizer: Tokenizer,
-        # Infill training
         infill_probability: float = 0.75,
         infill_bar_fraction: float = 0.5,
-        # Bar masking (independent of infill)
         mask_bar_config: MaskBarConfig | None = None,
-        # Sequence budget
         max_seq_len: int = 2048,
-        # Window / track sampling
         max_tracks: int = 12,
         min_tracks: int = 1,
         min_fill_ratio: float = 0.75,
-        # Switchable mode dropout probabilities (only used when the encoder
-        # config has switchable_velocity / switchable_microtiming = true).
-        # Each value is the probability that the feature is turned OFF for a
-        # given training sample, so the model sees both modes during training.
-        # 0.0 = always on (no dropout); 0.5 = equal mix; 1.0 = always off.
+        window_selection: str = "fixed",
+        temperature: float = 1.0,
         velocity_off_probability: float = 0.0,
         microtiming_off_probability: float = 0.0,
-        # Genre injection probability (only used when encoder config has
-        # genre_groups configured). When the sample has a recognized genre,
-        # include the Genre token with this probability, omit with 1-p.
-        # 1.0 = always include when known; 0.0 = never include.
         genre_probability: float = 1.0,
     ):
         try:
             import datasets as hf
         except ImportError:
             raise ImportError("pip install midigpt[train]") from None
+
         paths = _resolve_paths(parquet_path)
         self._data = hf.load_dataset("parquet", data_files=paths, split="train")
         self._encoder_config_json: str = tokenizer._vocab.config().to_json()
-        self._tokenizer = tokenizer
-        self._infill_prob = infill_probability
-        self._infill_frac = infill_bar_fraction
-        self._mask_cfg = mask_bar_config
-        self._max_seq_len = max_seq_len
-        self._max_tracks = max_tracks
-        self._min_tracks = min_tracks
-        self._min_fill_ratio = min_fill_ratio
-        self._velocity_off_prob = velocity_off_probability
-        self._microtiming_off_prob = microtiming_off_probability
-        self._genre_probability = genre_probability
 
-        cfg_dict = json.loads(tokenizer._vocab.config().to_json())
-        raw_map = cfg_dict.get("num_bars_map") or [4]
-        self._num_bars_choices: list[int] = sorted(set(int(x) for x in raw_map), reverse=True)
-
-        if infill_probability > 0 and not cfg_dict.get("supports_infill", False):
+        if infill_probability > 0 and not json.loads(self._encoder_config_json).get("supports_infill", False):
             raise ValueError(
                 f"infill_probability={infill_probability} > 0 but the encoder config "
-                f"has supports_infill=false. Set infill_probability=0.0 or use an "
-                f"infill-capable checkpoint."
+                f"has supports_infill=false"
             )
-        if mask_bar_config is not None:
-            if not tokenizer._vocab.has(_core.TokenType.MaskBar):
-                raise ValueError(
-                    "mask_bar_config is set but the encoder vocab does not include "
-                    "the MaskBar token. Set mask_bar_config=None or use a "
-                    "masking-capable checkpoint."
-                )
+        if mask_bar_config is not None and not tokenizer._vocab.has(_core.TokenType.MaskBar):
+            raise ValueError("mask_bar_config is set but encoder vocab has no MaskBar token")
+        if velocity_off_probability > 0.0 and not json.loads(self._encoder_config_json).get("switchable_velocity", False):
+            raise ValueError("velocity_off_probability > 0 but encoder has switchable_velocity=false")
+        if microtiming_off_probability > 0.0 and not json.loads(self._encoder_config_json).get("switchable_microtiming", False):
+            raise ValueError("microtiming_off_probability > 0 but encoder has switchable_microtiming=false")
 
-        self._switchable_velocity    = bool(cfg_dict.get("switchable_velocity",    False))
-        self._switchable_microtiming = bool(cfg_dict.get("switchable_microtiming", False))
-        if velocity_off_probability > 0.0 and not self._switchable_velocity:
-            raise ValueError(
-                "velocity_off_probability > 0 but encoder config has switchable_velocity=false. "
-                "Only set this for models trained with switchable velocity."
-            )
-        if microtiming_off_probability > 0.0 and not self._switchable_microtiming:
-            raise ValueError(
-                "microtiming_off_probability > 0 but encoder config has switchable_microtiming=false. "
-                "Only set this for models trained with switchable microtiming."
-            )
-        if not (0.0 <= genre_probability <= 1.0):
-            raise ValueError(f"genre_probability must be in [0, 1] (got {genre_probability})")
-        self._genre_grouping = tokenizer._vocab.config().genre_grouping  # None or GenreGrouping
+        cfg_dict = json.loads(tokenizer._vocab.config().to_json())
+        num_bars_choices = sorted(set(int(x) for x in (cfg_dict.get("num_bars_map") or [4])), reverse=True)
 
         ts_list = cfg_dict.get("time_signatures")
         valid_ts: frozenset[str] | None = frozenset(ts_list) if ts_list else None
 
-        # Per-shard filtering (each shard gets its own cache entry).
-        # Global indices are reconstructed from per-shard row counts.
         all_valid: list[int] = []
         offset = 0
         for path in paths:
             n = pq.read_metadata(path).num_rows
             local_valid = _load_or_build_valid_indices(
-                path,
-                min_bars=self._num_bars_choices[-1],
-                min_tracks=min_tracks,
-                valid_time_sigs=valid_ts,
+                path, min_bars=num_bars_choices[-1], min_tracks=min_tracks, valid_time_sigs=valid_ts,
             )
             all_valid.extend(i + offset for i in local_valid)
             offset += n
         self._data = self._data.select(all_valid)
 
-    def __getstate__(self) -> dict:
-        state = self.__dict__.copy()
-        # C++ pybind11 objects are not picklable; strip them so spawn workers
-        # can receive the dataset. _ensure_tokenizer() rebuilds them lazily.
-        state["_tokenizer"] = None
-        state["_genre_grouping"] = None
-        return state
+        super().__init__(
+            tokenizer=tokenizer,
+            num_bars_choices=num_bars_choices,
+            infill_prob=infill_probability,
+            infill_bar_fraction=infill_bar_fraction,
+            max_seq_len=max_seq_len,
+            max_tracks=max_tracks,
+            min_tracks=min_tracks,
+            min_fill_ratio=min_fill_ratio,
+            window_selection=window_selection,
+            temperature=temperature,
+            mask_bar_config=mask_bar_config,
+            velocity_off_prob=velocity_off_probability,
+            microtiming_off_prob=microtiming_off_probability,
+            genre_probability=genre_probability,
+        )
 
-    def __setstate__(self, state: dict) -> None:
-        self.__dict__.update(state)
-
-    def _ensure_tokenizer(self) -> None:
-        if self._tokenizer is None:
-            cfg = _core.EncoderConfig.from_json(self._encoder_config_json)
-            self._tokenizer = Tokenizer(cfg)
-            self._genre_grouping = self._tokenizer._vocab.config().genre_grouping
+        self._stash_cache: dict[int, dict] = {}
+        self._ensure_tokenizer = lambda: None  # no-op; tokenizer is set in __init__
 
     def __len__(self) -> int:
         return len(self._data)
 
-    def __getitem__(self, idx: int, _depth: int = 0) -> dict:
-        if _depth >= 10:
-            raise RuntimeError("MidiGPTDataset: failed to load a valid sample after 10 attempts")
+    def __getitem__(self, idx: int) -> dict | None:
         try:
-            return self._encode_one(idx)
+            return self._getitem_inner(idx)
         except Exception:
-            return self.__getitem__(random.randrange(len(self._data)), _depth + 1)
+            return None
 
-    def _genre_token(self, idx: int) -> int:
-        """Return genre token id for sample idx, or -1 if unavailable/omitted."""
-        from urllib.parse import unquote
-
-        self._ensure_tokenizer()
-        if self._genre_grouping is None or random.random() >= self._genre_probability:
-            return -1
-        raw = self._data[idx].get("music_style_scraped") or ""
-        if not raw:
-            return -1
-        genres = [g.strip() for g in unquote(raw).split(",") if g.strip()]
-        known = [g for g in genres if self._genre_grouping.contains(g)]
-        if not known:
-            return -1
-        return self._genre_grouping.encode(random.choice(known))
-
-    def _stash_nomml(self, score: Score, idx: int) -> None:
-        """Seed track.attributes["_nomml_raw"] from GigaMIDI's precomputed
-        per-track NOMML column so Nomml.compute() uses ground truth instead
-        of recomputing from an already bar-quantized Score (which would lose
-        the fine onset alignment the metric depends on). -1 entries (no valid
-        value for that track) are left unset, falling back to Nomml.compute's
-        own (lower-fidelity) recomputation.
-        """
-        values = self._data[idx].get("NOMML")
-        if not values:
-            return
-        for t_idx, track in enumerate(score.tracks):
-            if t_idx >= len(values):
-                break
-            v = values[t_idx]
-            if v is not None and v != -1:
-                track.attributes["_nomml_raw"] = int(v)
-
-    def _encode_one(self, idx: int) -> dict:
-        self._ensure_tokenizer()
-        # Score.from_bytes() already returns a fresh, owned object; the
-        # subsequent augmentations mutate copies, so an extra deepcopy here is
-        # pure overhead (~1.5 ms/sample).
+    def _load_score(self, idx: int) -> Score:
         score = Score.from_bytes(self._data[idx]["music"])
         self._stash_nomml(score, idx)
+        return score
 
-        score = _TRANSPOSE(score)
-        score = _VELOCITY(score)
-
-        # Roll both decisions independently.
-        is_infill = random.random() < self._infill_prob
-        do_mask = self._mask_cfg is not None  # gate is inside MaskBar itself
-
-        initial = random.choice(self._num_bars_choices)
-        fallbacks = sorted([n for n in self._num_bars_choices if n < initial], reverse=True)
-
-        for n_bars in [initial, *fallbacks]:
-            for n_tracks in range(self._max_tracks, self._min_tracks - 1, -1):
-                window = select_window(score, n_bars, n_tracks, self._min_fill_ratio)
-                if window is None:
-                    continue
-
-                # Sample a random per-cell probability uniformly in
-                # [0, infill_bar_fraction], then independently apply it to
-                # every (track, bar) cell. This varies density across samples
-                # so the model trains on the full spectrum (few to many infill
-                # targets). If no cell is selected, force one at random.
-                infill_bars: set[tuple[int, int]] = set()
-                if is_infill:
-                    p = random.uniform(0.0, self._infill_frac)
-                    infill_bars = {
-                        (t_idx, b_idx)
-                        for t_idx in range(len(window.tracks))
-                        for b_idx in range(len(window.tracks[t_idx].bars))
-                        if random.random() < p
-                    }
-                    if not infill_bars:
-                        t = random.randrange(len(window.tracks))
-                        b = random.randrange(len(window.tracks[t].bars))
-                        infill_bars = {(t, b)}
-
-                if do_mask:
-                    window = MaskBar(self._mask_cfg, infill_bars=infill_bars)(window)
-
-                encode_opts = _core.EncodeOptions()
-                if is_infill and infill_bars:
-                    encode_opts.multi_fill = infill_bars
-                # Switchable mode dropout: randomly disable velocity/microtiming
-                # so the model sees both modes during training.
-                if self._switchable_velocity and self._velocity_off_prob > 0.0:
-                    encode_opts.use_velocity = 0 if random.random() < self._velocity_off_prob else 1
-                if self._switchable_microtiming and self._microtiming_off_prob > 0.0:
-                    encode_opts.use_microtiming = 0 if random.random() < self._microtiming_off_prob else 1
-                encode_opts.genre = self._genre_token(idx)
-                try:
-                    tokens = self._tokenizer.encode(window, opts=encode_opts)
-                except Exception:
-                    continue
-
-                if is_infill and len(tokens) > self._max_seq_len:
-                    # Never clip FillIn tokens — retry with fewer resources.
-                    continue
-
-                if len(tokens) > self._max_seq_len:
-                    offset = random.randint(0, len(tokens) - self._max_seq_len)
-                    tokens = tokens[offset : offset + self._max_seq_len]
-
-                return {"input_ids": tokens, "labels": tokens}
-
-        # Fallback: smallest window, 1 track, no infill, hard clip.
-        window = select_window(
-            score, self._num_bars_choices[-1], self._min_tracks, self._min_fill_ratio
-        )
-        try:
-            fallback_opts = _core.EncodeOptions()
-            if self._switchable_velocity and self._velocity_off_prob > 0.0:
-                fallback_opts.use_velocity = 0 if random.random() < self._velocity_off_prob else 1
-            if self._switchable_microtiming and self._microtiming_off_prob > 0.0:
-                fallback_opts.use_microtiming = 0 if random.random() < self._microtiming_off_prob else 1
-            fallback_opts.genre = self._genre_token(idx)
-            tokens = self._tokenizer.encode(
-                window if window else score, opts=fallback_opts
-            )[: self._max_seq_len]
-        except Exception as exc:
-            raise ValueError(f"Failed to encode sample {idx} after all retries") from exc
-        return {"input_ids": tokens, "labels": tokens}
+    def _stash_nomml(self, score: Score, idx: int) -> None:
+        if idx in self._stash_cache:
+            values = self._stash_cache[idx]
+        else:
+            row = self._data[idx]
+            values = {}
+            for key in ("NOMML", "nomml", "nomml_raw"):
+                if key in row and row[key] is not None:
+                    values = row[key] if isinstance(row[key], dict) else {}
+                    break
+            self._stash_cache[idx] = values
+        for t_idx, track in enumerate(score.tracks):
+            v = values.get(t_idx, values.get(str(t_idx)))
+            if v is not None and v != -1:
+                track.attributes["_nomml_raw"] = int(v)

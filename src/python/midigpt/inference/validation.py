@@ -291,6 +291,29 @@ def validate_request(
                         f"not in config.time_signatures"
                     )
 
+    # Cross-track time signature consistency: all tracks must agree on ts per bar.
+    # Audio tracks are skipped — their TS is inferred at encode time from the
+    # first non-Audio track at the same bar index, so the Python Score may carry
+    # a default 4/4 that differs from the actual non-Audio tracks.
+    nb_track_common = min(len(t.bars) for t in score.tracks) if score.tracks else 0
+    for bi in range(nb_track_common):
+        ts_vals = set()
+        for ti, t in enumerate(score.tracks):
+            if bi < len(t.bars):
+                if getattr(t, "track_type", None) == "audio":
+                    continue
+                b = t.bars[bi]
+                tsn = getattr(b, "ts_numerator", None)
+                tsd = getattr(b, "ts_denominator", None)
+                if tsn and tsd:
+                    ts_vals.add((tsn, tsd))
+        if len(ts_vals) > 1:
+            raise RequestValidationError(
+                f"bar {bi}: time signature mismatch across tracks "
+                f"{ts_vals}; all tracks must have the same time signature "
+                f"at the same bar index"
+            )
+
     # ---------------- pitch range warning ----------------
     pmin = getattr(encoder_config, "pitch_min", 0)
     pmax = getattr(encoder_config, "pitch_max", 127)
@@ -481,13 +504,52 @@ def validate_request(
         # Attribute name + value range + track-type compatibility
         track = score.tracks[tp.id] if tp.id < len(score.tracks) else None
         is_drum_track = None
+        is_audio_track = False
         if track is not None:
             tt = getattr(track, "track_type", None)
             if tt is None:
                 from midigpt._core import TrackType
 
-                tt = "drum" if track.type == TrackType.Drum else "melodic"
+                tt = (
+                    "drum" if track.type == TrackType.Drum
+                    else "audio" if track.type == TrackType.Audio
+                    else "melodic"
+                )
             is_drum_track = tt == "drum"
+            is_audio_track = tt == "audio"
+
+        # --- Audio track constraints ---
+        # Audio tracks are context-only: the encoder emits [AudioContext]
+        # tokens instead of notes. They cannot be generation targets, cannot
+        # have mask_bars (masking removes the audio context), and cannot
+        # carry attributes/controls (no notes to analyze).
+        if is_audio_track:
+            if not tp.ignore and tp.bars:
+                raise RequestValidationError(
+                    f"track_id={tp.id}: audio tracks are context-only "
+                    f"(no MIDI notes) and cannot be generation targets; "
+                    f"set ignore=True or bars=[]"
+                )
+            if tp.mask_bars:
+                raise RequestValidationError(
+                    f"track_id={tp.id}: audio tracks cannot have mask_bars"
+                )
+            if tp.attributes:
+                raise RequestValidationError(
+                    f"track_id={tp.id}: audio tracks cannot have attributes"
+                )
+            if tp.controls:
+                raise RequestValidationError(
+                    f"track_id={tp.id}: audio tracks cannot have controls"
+                )
+            if tp.bar_attributes:
+                raise RequestValidationError(
+                    f"track_id={tp.id}: audio tracks cannot have bar_attributes"
+                )
+            if tp.bar_controls:
+                raise RequestValidationError(
+                    f"track_id={tp.id}: audio tracks cannot have bar_controls"
+                )
 
         for k, v in tp.attributes.items():
             if attr_names and k not in attr_names:

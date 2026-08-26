@@ -288,7 +288,7 @@ class _KVRunner:
     def is_prefill(self) -> bool:
         return self._past_kv is None
 
-    def forward(self, ctx_t, key_mask=None, position_ids=None):
+    def forward(self, ctx_t, key_mask=None, position_ids=None, soft_token_replacements=None):
         """Run one model call. Returns logits tensor (full output[0]).
 
         On the first call past_kv is sourced from the cached empty-kv (avoids
@@ -308,6 +308,8 @@ class _KVRunner:
             kwargs["key_mask"] = key_mask
         if position_ids is not None:
             kwargs["position_ids"] = position_ids
+        if soft_token_replacements is not None:
+            kwargs["soft_token_replacements"] = soft_token_replacements
         pkv = self._past_kv if self._past_kv is not None else self._initial_kv
         try:
             outputs = (
@@ -1215,6 +1217,8 @@ class SamplingSession:
             for t_idx, track in enumerate(score.tracks):
                 if t_idx in full_ar_ids:
                     continue
+                if getattr(track, "track_type", None) == "audio":
+                    continue
                 new_attrs = dict(track.attributes)
                 new_attrs.update(analyzer.compute_track_tokens(score, t_idx))
                 for b_idx in range(len(track.bars)):
@@ -1236,6 +1240,8 @@ class SamplingSession:
         # ignore them here so the request still runs.
         for tp in self._request.tracks:
             if tp.id >= len(score.tracks):
+                continue
+            if getattr(score.tracks[tp.id], "track_type", None) == "audio":
                 continue
             track_attrs = score.tracks[tp.id].attributes
             if tp.id in full_ar_ids:
@@ -1534,7 +1540,20 @@ class SamplingSession:
                     )
 
                 t_fwd = time.perf_counter()
-                logits_seq = kv.forward(ctx, key_mask=km, position_ids=pos_ids)
+                # Audio conditioning: replace AudioContext/MaskBar embeddings
+                # with audio-derived soft tokens during prefill (only; decode
+                # steps don't re-encode).
+                _soft_replacements = None
+                if is_prefill and self._request.audio_conditioning and self._engine._audio_adapter is not None:
+                    _soft_replacements = []
+                    ctx_tokens = state.context_tokens()
+                    for bar_frames, track_frames, pos in self._request.audio_conditioning:
+                        if pos < len(ctx_tokens):
+                            bar_t = torch.tensor(bar_frames, dtype=torch.float32).unsqueeze(0) if not isinstance(bar_frames, torch.Tensor) else bar_frames.unsqueeze(0) if bar_frames.ndim == 1 else bar_frames
+                            track_t = torch.tensor(track_frames, dtype=torch.float32).unsqueeze(0) if not isinstance(track_frames, torch.Tensor) else track_frames.unsqueeze(0) if track_frames.ndim == 1 else track_frames
+                            soft_emb = self._engine._audio_adapter(bar_t, track_frames=track_t)
+                            _soft_replacements.append((pos, soft_emb.squeeze(0)))
+                logits_seq = kv.forward(ctx, key_mask=km, position_ids=pos_ids, soft_token_replacements=_soft_replacements)
                 if logits_seq.device.type == "mps":
                     torch.mps.synchronize()
                 if self.enable_profiling:
@@ -1771,6 +1790,8 @@ class SamplingSession:
             for t_idx, track in enumerate(score.tracks):
                 if t_idx in full_ar_ids:
                     continue
+                if getattr(track, "track_type", None) == "audio":
+                    continue
                 new_attrs = dict(track.attributes)
                 new_attrs.update(analyzer.compute_track_tokens(score, t_idx))
                 for b_idx in range(len(track.bars)):
@@ -1784,6 +1805,8 @@ class SamplingSession:
 
         for tp in self._request.tracks:
             if tp.id >= len(score.tracks):
+                continue
+            if getattr(score.tracks[tp.id], "track_type", None) == "audio":
                 continue
             track_attrs = score.tracks[tp.id].attributes
             if tp.id in full_ar_ids:
@@ -2010,7 +2033,18 @@ class SamplingSession:
                     )
 
                 t_fwd = time.perf_counter()
-                logits_seq = kv.forward(ctx)
+                # Audio conditioning: replace AudioContext/MaskBar embeddings
+                # during prefill.
+                _soft_replacements = None
+                if is_prefill and self._request.audio_conditioning and self._engine._audio_adapter is not None:
+                    _soft_replacements = []
+                    for bar_frames, track_frames, pos in self._request.audio_conditioning:
+                        if pos < len(_ctx_toks):
+                            bar_t = torch.tensor(bar_frames, dtype=torch.float32).unsqueeze(0) if not isinstance(bar_frames, torch.Tensor) else bar_frames.unsqueeze(0) if bar_frames.ndim == 1 else bar_frames
+                            track_t = torch.tensor(track_frames, dtype=torch.float32).unsqueeze(0) if not isinstance(track_frames, torch.Tensor) else track_frames.unsqueeze(0) if track_frames.ndim == 1 else track_frames
+                            soft_emb = self._engine._audio_adapter(bar_t, track_frames=track_t)
+                            _soft_replacements.append((pos, soft_emb.squeeze(0)))
+                logits_seq = kv.forward(ctx, soft_token_replacements=_soft_replacements)
                 if logits_seq.device.type == "mps":
                     torch.mps.synchronize()
                 if self.enable_profiling:
@@ -2463,7 +2497,9 @@ class SamplingSession:
     def _note_count(self, score: Score, step: GenerationStep) -> int:
         count = 0
         for tp in self._request.tracks:
-            # Check if this track is the one being generated in this step
+            # Audio tracks have no notes — skip.
+            if getattr(score.tracks[tp.id], "track_type", None) == "audio":
+                continue
 
             for bar_idx in tp.bars:
                 if bar_idx >= len(score.tracks[tp.id].bars):
@@ -2517,6 +2553,10 @@ class SamplingSession:
 
         for tp in self._request.tracks:
             if tp.id >= n_tracks:
+                continue
+            # Audio tracks are context-only — never generate from them.
+            if getattr(self._score.tracks[tp.id], "track_type", None) == "audio":
+                ignore[tp.id] = True
                 continue
             for b in tp.bars:
                 if b < n_bars:
@@ -2624,7 +2664,10 @@ class SamplingSession:
         for tp in self._request.tracks:
             # Attribute constraints only apply to full-AR tracks; infill and
             # partial-AR pin attributes through the encoded prompt.
+            # Audio tracks are context-only — no attributes to constrain.
             if tp.id not in full_ar_ids:
+                continue
+            if getattr(self._score.tracks[tp.id], "track_type", None) == "audio":
                 continue
             if tp.id in step.track_indices:
                 for attr_name, token_type in attr_to_token.items():

@@ -91,8 +91,14 @@ Score Decoder::decode(const std::vector<int>& tokens) const {
             }
             current_track = &score.tracks[track_count];
 
-            // Track type token: 0 = melodic, 1 = drum.
-            current_track->type = (value == 1) ? TrackType::Drum : TrackType::Melodic;
+            // Track type token: 0 = melodic, 1 = drum, 2 = audio.
+            if (value == 1) {
+                current_track->type = TrackType::Drum;
+            } else if (value == 2) {
+                current_track->type = TrackType::Audio;
+            } else {
+                current_track->type = TrackType::Melodic;
+            }
             is_drum_track = (current_track->type == TrackType::Drum);
             current_bar = nullptr;
             break;
@@ -228,6 +234,10 @@ Score Decoder::decode(const std::vector<int>& tokens) const {
 
         case TokenType::MaskBar:
             // Masked bar — no notes to decode
+            break;
+
+        case TokenType::AudioContext:
+            // Audio context marker — no notes to decode (audio track)
             break;
 
         case TokenType::FillInPlaceholder:

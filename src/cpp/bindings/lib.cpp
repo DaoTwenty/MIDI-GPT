@@ -143,11 +143,13 @@ PYBIND11_MODULE(_core, m) {
       .value("PieceEnd", TokenType::PieceEnd)
       .value("UseVelocity", TokenType::UseVelocity)
       .value("UseMicrotiming", TokenType::UseMicrotiming)
-      .value("TrackLevelNomml", TokenType::TrackLevelNomml);
+      .value("TrackLevelNomml", TokenType::TrackLevelNomml)
+      .value("AudioContext", TokenType::AudioContext);
 
   py::enum_<TrackType>(m, "TrackType")
       .value("Melodic", TrackType::Melodic)
-      .value("Drum", TrackType::Drum);
+      .value("Drum", TrackType::Drum)
+      .value("Audio", TrackType::Audio);
 
   py::enum_<BooleanEnum>(m, "BooleanEnum")
       .value("Any", BooleanEnum::Any)

@@ -46,6 +46,9 @@ class InferenceEngine:
         self._tokenizer = tokenizer
         self._analyzer = analyzer
         self._initial_kv = None  # cached once by warmup() or first generate
+        # Optional audio conditioning components
+        self._audio_adapter = None
+        self._audio_extractor = None
 
     @classmethod
     def from_pretrained(
@@ -144,3 +147,13 @@ class InferenceEngine:
         if self._initial_kv is None:
             self._initial_kv = self._compute_initial_kv()
         return SamplingSession(self, score, request)
+
+    def attach_audio_conditioning(self, adapter, extractor) -> None:
+        """Attach audio adapter + extractor for conditioned inference.
+
+        When attached, SamplingSession detects MaskBar tokens in the
+        context and replaces their embeddings with audio-derived soft
+        tokens produced by the adapter.
+        """
+        self._audio_adapter = adapter
+        self._audio_extractor = extractor

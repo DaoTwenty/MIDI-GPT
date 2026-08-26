@@ -25,7 +25,7 @@ class Bar:
 class Track:
     bars: list[Bar] = field(default_factory=list)
     instrument: int = 0
-    track_type: str = "melodic"  # "melodic" | "drum"
+    track_type: str = "melodic"  # "melodic" | "drum" | "audio"
     attributes: dict[str, int] = field(default_factory=dict)
 
 

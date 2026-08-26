@@ -82,6 +82,7 @@ enum class TokenType {
 
     // Track-level expressiveness control (NOMML median metric depth, 0-12).
     TrackLevelNomml = 88,
+    AudioContext    = 89,
 
     // Aliases for refactor names if needed
     OnsetPolyphony = 42,    // Use MaxPolyphony as alias for OnsetPolyphony
@@ -92,7 +93,7 @@ enum class TokenType {
     PieceEnd = 70           // Use None for PieceEnd if not present
 };
 
-enum class TrackType { Melodic = 0, Drum = 1 };
+enum class TrackType { Melodic = 0, Drum = 1, Audio = 2 };
 
 // Used by attribute constraints: ANY means unconstrained
 enum class BooleanEnum { Any = 0, False = 1, True = 2 };

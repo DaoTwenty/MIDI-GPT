@@ -82,6 +82,7 @@ static std::string to_string(TokenType t) {
         case TokenType::UseVelocity: return "UseVelocity";
         case TokenType::UseMicrotiming: return "UseMicrotiming";
         case TokenType::TrackLevelNomml: return "TrackLevelNomml";
+        case TokenType::AudioContext: return "AudioContext";
         default: return "Unknown";
     }
 }
@@ -170,6 +171,7 @@ static TokenType from_string(const std::string& s) {
     if (s == "UseVelocity") return TokenType::UseVelocity;
     if (s == "UseMicrotiming") return TokenType::UseMicrotiming;
     if (s == "TrackLevelNomml") return TokenType::TrackLevelNomml;
+    if (s == "AudioContext") return TokenType::AudioContext;
 
     throw std::runtime_error("Unknown token type string: " + s);
 }
@@ -235,10 +237,11 @@ void EncoderConfig::derive_token_domains() {
 
     // Structural — always present.
     token_domains.push_back({TokenType::PieceStart, supports_infill ? 2 : 1});
-    token_domains.push_back({TokenType::Track,      2});      // 0=melodic, 1=drums
+    token_domains.push_back({TokenType::Track,      3});      // 0=melodic, 1=drums, 2=audio
     token_domains.push_back({TokenType::TrackEnd,   1});
     token_domains.push_back({TokenType::Bar,        1});
     token_domains.push_back({TokenType::BarEnd,     1});
+    token_domains.push_back({TokenType::AudioContext, 1});
 
     // Time signatures — number of supported sigs.
     if (time_signatures && time_signatures->size() > 0) {

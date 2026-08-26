@@ -5,10 +5,17 @@ dataset init is instant (cache hit) rather than running the subprocess scan
 at training startup.
 
 Usage:
+    # Standard MIDI-only training:
     python -m midigpt.training.preprocess \\
         --parquet /data/v2.0.0/train/00000.parquet \\
         --checkpoint models/yellow_medium-final.safetensors \\
         [--min-bars 4] [--min-tracks 1]
+
+    # Audio-conditioned training (enforces min_tracks=2):
+    python -m midigpt.training.preprocess \\
+        --parquet /data/v2.0.0/train/00000.parquet \\
+        --checkpoint models/yellow_medium-final.safetensors \\
+        --audio-conditioned
 
     # Or with a raw encoder-config JSON instead of a checkpoint bundle:
     python -m midigpt.training.preprocess \\
@@ -123,6 +130,13 @@ def main() -> None:
     parser.add_argument("--min-bars", type=int, default=4)
     parser.add_argument("--min-tracks", type=int, default=1)
     parser.add_argument(
+        "--audio-conditioned",
+        action="store_true",
+        default=False,
+        help="Audio-conditioned training mode. Enforces min_tracks=2 (need at "
+             "least one audio context track + one MIDI target track).",
+    )
+    parser.add_argument(
         "--workers",
         type=int,
         default=1,
@@ -133,6 +147,12 @@ def main() -> None:
 
     if args.checkpoint and args.encoder_config:
         parser.error("Use --checkpoint or --encoder-config, not both.")
+
+    # Audio-conditioned defaults
+    if args.audio_conditioned:
+        if args.min_tracks < 2:
+            print(f"Audio-conditioned mode: overriding min_tracks from {args.min_tracks} to 2")
+            args.min_tracks = 2
 
     # Expand globs (useful when the shell doesn't expand them, e.g. via SLURM)
     paths: list[str] = []

@@ -1,0 +1,10 @@
+host: 0.0.0.0
+port: 8000
+log_level: INFO
+default_model: yellow_medium
+
+models:
+  - id: yellow_small
+    pretrained: yellow_small
+  - id: yellow_medium
+    pretrained: yellow_medium

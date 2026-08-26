@@ -1,0 +1,94 @@
+:root {
+  --bg:        #0d1117;
+  --panel:     #161b22;
+  --border:    #30363d;
+  --fg:        #e6edf3;
+  --muted:     #8b949e;
+
+  --st-context:       #238636;
+  --st-generated:     #1f6feb;
+  --st-target-done:   #1f6feb;
+  --st-generating:    #d29922;
+  --st-pending:       #6e7681;
+  --st-wasted:        #da3633;
+  --st-outside:       #0d1117;
+  --st-mask-base:     #8957e5;
+  --stripe-future:    rgba(255,255,255,0.45);
+  --stripe-past:      rgba(0,0,0,0.55);
+  --stripe-failed:    rgba(218,54,51,0.85);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg);
+             font-family: 'JetBrains Mono', ui-monospace, monospace; }
+header { padding: 16px 20px; border-bottom: 1px solid var(--border); }
+h1 { margin: 0 0 8px 0; font-size: 18px; }
+h2 { font-size: 13px; color: var(--muted); margin: 0 0 8px 0;
+     text-transform: uppercase; letter-spacing: 0.05em; }
+main { padding: 16px 20px; max-width: 1100px; }
+.panel { background: var(--panel); border: 1px solid var(--border);
+         border-radius: 6px; padding: 14px 16px; margin-bottom: 14px; }
+
+.bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.spacer { flex: 1; }
+button { background: #21262d; color: var(--fg); border: 1px solid var(--border);
+         border-radius: 4px; padding: 6px 12px; font: inherit; cursor: pointer; }
+button:hover { background: #30363d; }
+input, textarea { background: #0d1117; color: var(--fg);
+                  border: 1px solid var(--border); border-radius: 4px;
+                  padding: 4px 8px; font: inherit; }
+input[type=number] { width: 90px; }
+textarea { width: 100%; resize: vertical; }
+.status { color: var(--muted); font-size: 12px; }
+
+pre { white-space: pre-wrap; margin: 0; font-size: 12px; color: var(--fg); }
+
+/* Grid */
+.grid-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.grid-table th, .grid-table td {
+  border: 1px solid var(--border); padding: 0; text-align: center;
+  height: 32px; min-width: 36px;
+}
+.grid-table th { background: #0d1117; color: var(--muted);
+                 font-weight: normal; padding: 3px 4px; height: auto; }
+.grid-table td.label { background: #0d1117; color: var(--fg);
+                       text-align: left; padding-left: 10px;
+                       min-width: 150px; white-space: nowrap; }
+.cell { width: 100%; height: 100%; display: flex; align-items: center;
+        justify-content: center; color: rgba(230,237,243,0.9); font-size: 10px; }
+
+.s-CONTEXT       { background: var(--st-context); }
+.s-GENERATED     { background: var(--st-generated); }
+.s-TARGET_DONE   { background: var(--st-target-done); }
+.s-GENERATING    { background: var(--st-generating); }
+.s-TO_GENERATE   { background: var(--st-generating); }
+.s-PENDING       { background: var(--st-pending); }
+.s-WASTED        { background: var(--st-wasted); }
+.s-OUTSIDE       { background: var(--st-outside); }
+.s-MASKED_FUTURE { background:
+  repeating-linear-gradient(45deg, var(--stripe-future) 0 2px, transparent 2px 6px),
+  var(--st-mask-base); }
+.s-MASKED_PAST   { background:
+  repeating-linear-gradient(45deg, var(--stripe-past)   0 2px, transparent 2px 6px),
+  var(--st-mask-base); }
+.s-MASKED_FAILED { background:
+  repeating-linear-gradient(45deg, var(--stripe-failed) 0 2px, transparent 2px 6px),
+  var(--st-mask-base); }
+
+/* Simplified model-side view: three states only. */
+.s-M_CONTEXT { background: var(--st-context); }
+.s-M_MASKED  { background: var(--st-mask-base); }
+.s-M_TO_GEN  { background: var(--st-generating); }
+
+/* Legend */
+.legend { display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap;
+          font-size: 11px; color: var(--muted); }
+.legend-item { display: inline-flex; gap: 6px; align-items: center; }
+.legend-sw { width: 16px; height: 16px; border-radius: 3px;
+             border: 1px solid var(--border); }
+
+/* History */
+.entry { border: 1px solid var(--border); border-radius: 4px;
+         padding: 8px 10px; margin-bottom: 8px; }
+.entry .meta { color: var(--muted); font-size: 11px; }
+.entry .body { margin-top: 6px; white-space: pre-wrap; font-size: 12px; }
