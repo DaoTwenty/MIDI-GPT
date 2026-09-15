@@ -63,18 +63,6 @@ def compact_log(token_ids, names, max_notes=3):
 
 # ── Dummy audio extractor for smoke test ───────────────────────────
 
-class DummyExtractor:
-    """Returns small random tensors — validates the pipeline without real audio."""
-    feature_dim = 64
-
-    def extract_track_frames(self, wav, sample_rate=16000):
-        return torch.randn(self.feature_dim)
-
-    def extract_bar_frames(self, wav, sample_rate=16000, bar_intervals=None):
-        n_bars = len(bar_intervals) if bar_intervals else 4
-        return [torch.randn(self.feature_dim) for _ in range(n_bars)]
-
-
 def main():
     # ── 1. Load tokenizer ──────────────────────────────────────────
     cache_path = os.path.expanduser(
@@ -201,13 +189,11 @@ def main():
     from torch.utils.data import DataLoader
 
     sf_synth = SoundFontSynthesizer("soundfonts", sample_rate=16000)
-    dummy_ext = DummyExtractor()
     print(f"  SoundFont pool: {len(sf_synth._sf2_paths)} SF2s")
 
     giga_dataset = AudioTransitionDataset(
         scores=giga_scores[:20],
         tokenizer=tokenizer,
-        audio_extractor=dummy_ext,
         synthesizer=sf_synth,
         num_bars_choices=[4, 8],
         infill_prob=0.5,
@@ -220,7 +206,6 @@ def main():
     slakh_dataset = SlakhPairedStemDataset(
         samples=slakh_samples[:10],
         tokenizer=tokenizer,
-        audio_extractor=dummy_ext,
         num_bars_choices=[4, 8],
         infill_prob=0.5,
         audio_track_prob=0.7,

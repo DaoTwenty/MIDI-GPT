@@ -101,6 +101,76 @@ class AudioConditionedLightningModule(L.LightningModule):
         )
         return logits
 
+    def _extract_soft_replacements(self, batch: dict[str, Any]) -> list[tuple[int, int, torch.Tensor]]:
+        """Run audio feature extraction on GPU, batched per sample, then the adapter.
+
+        Datasets hand back raw waveforms (see ``_extract_audio_features`` in
+        audio_dataset.py) instead of pre-extracted features specifically so this
+        can run here: self.audio_extractor is a real submodule of this
+        LightningModule, so Lightning already puts it on the accelerator device
+        alongside gpt2_model and audio_adapter. Doing extraction here — instead
+        of CPU-side in DataLoader workers — means DataLoader worker processes
+        keep synthesizing the *next* batch's waveforms on CPU while this step's
+        extraction + adapter + GPT-2 forward/backward runs on GPU, and it turns
+        what used to be up to 2 extractor forward passes per audio track
+        (extract_track_frames + extract_bar_frames, called separately) into one
+        forward pass per sample covering every audio track in it at once.
+        """
+        if self.audio_extractor is None:
+            raise ValueError("Batch has audio_waveforms but this module has no audio_extractor.")
+
+        device = next(self.audio_adapter.parameters()).device
+        sample_rate = self.audio_extractor.sample_rate
+        soft_replacements: list[tuple[int, int, torch.Tensor]] = []
+
+        for sample_idx, waveforms in enumerate(batch["audio_waveforms"]):
+            if not waveforms:
+                continue
+            track_indices = batch["audio_track_indices"][sample_idx]
+            bar_intervals = batch["bar_intervals"][sample_idx]
+            refs = batch["audio_bar_refs"][sample_idx]
+            positions = batch["audio_bar_positions"][sample_idx]
+            if len(refs) != len(positions):
+                raise ValueError("Each audio bar must have exactly one tokenizer placeholder position.")
+
+            # Tracks in one window share bar timing (see get_bar_intervals), so their
+            # rendered waveforms are already the same length in the normal case —
+            # padding here is just a safety net, not the expected path.
+            #
+            # min_len guards against a near-empty or empty waveform reaching the
+            # extractor's STFT frontend (center=True, reflect pad needs length >
+            # n_fft//2 -- e.g. 1024 for MuScriptor's n_fft=1024 -- or torch.stft
+            # raises). A degenerate waveform can come from a Slakh stem crop
+            # landing past the end of the real (pre-rendered) audio file, or a
+            # very short live-synthesized clip; 100ms is comfortably above every
+            # extractor's reflect-pad floor. Silence-padding a rare short/empty
+            # clip is harmless -- see amber lora crash 2026-09-01.
+            min_len = int(sample_rate * 0.1)
+            max_len = max(max(w.shape[-1] for w in waveforms), min_len)
+            stacked = torch.zeros(len(waveforms), max_len, device=device)
+            for i, w in enumerate(waveforms):
+                stacked[i, : w.shape[-1]] = w.to(device)
+
+            with torch.no_grad():
+                frames = self.audio_extractor.extract_frames(stacked, sample_rate=sample_rate)
+            total_duration = max_len / sample_rate
+            track_to_local = {t_idx: i for i, t_idx in enumerate(track_indices)}
+
+            for (t_idx, b_idx), pos_idx in zip(refs, positions):
+                local = track_to_local[t_idx]
+                t_frames = frames[local]  # (T_total, D)
+                b_frames = self.audio_extractor.slice_bar_frames(
+                    t_frames, total_duration, [bar_intervals[b_idx]],
+                )[0]
+                soft_emb = self.audio_adapter(
+                    b_frames.unsqueeze(0), track_frames=t_frames.unsqueeze(0),
+                )
+                if soft_emb.shape[1] != 1:
+                    raise ValueError("Audio placeholder injection currently requires tokens_per_bar=1.")
+                soft_replacements.append((sample_idx, int(pos_idx), soft_emb))
+
+        return soft_replacements
+
     def _compute_loss(self, batch: dict[str, Any], stage: str) -> torch.Tensor:
         input_ids = batch["input_ids"]
         labels = batch["labels"]
@@ -139,6 +209,8 @@ class AudioConditionedLightningModule(L.LightningModule):
                     if soft_emb.shape[1] != 1:
                         raise ValueError("Audio placeholder injection currently requires tokens_per_bar=1.")
                     soft_replacements.append((sample_idx, int(pos_idx), soft_emb))
+        elif batch.get("audio_waveforms") and any(batch["audio_waveforms"]):
+            soft_replacements = self._extract_soft_replacements(batch)
 
         logits = self.forward(input_ids, soft_token_replacements=soft_replacements)
 
@@ -168,10 +240,16 @@ class AudioConditionedLightningModule(L.LightningModule):
         )
         return loss
 
-    def training_step(self, batch: dict[str, Any], batch_idx: int) -> torch.Tensor:
+    def training_step(self, batch: dict[str, Any] | None, batch_idx: int) -> torch.Tensor | None:
+        # AudioConditionedCollator returns None when every sample in the draw
+        # failed dataset-side (e.g. no valid window found) — skip rather than crash.
+        if batch is None:
+            return None
         return self._compute_loss(batch, "train")
 
-    def validation_step(self, batch: dict[str, Any], batch_idx: int) -> None:
+    def validation_step(self, batch: dict[str, Any] | None, batch_idx: int) -> None:
+        if batch is None:
+            return None
         self._compute_loss(batch, "val")
 
     def configure_optimizers(self):

@@ -15,6 +15,40 @@ import torch
 from midigpt._types import Score, Track
 
 
+def safe_pitch_shift(
+    waveform: torch.Tensor, sample_rate: int, n_steps: int, work_rate: int = 4000,
+) -> torch.Tensor:
+    """Pitch-shift by ``n_steps`` semitones without torchaudio's resample blowup.
+
+    ``torchaudio.functional.pitch_shift`` resamples internally via
+    ``torchaudio.functional.resample``, which picks exact integer up/down
+    sampling factors from ``gcd(orig_freq, new_freq)``. A semitone ratio like
+    ``2**(n_steps/12)`` almost always lands on a target rate coprime with a
+    real sample rate (e.g. 16000 -> 19029 Hz has gcd=1), so the resample
+    kernel scales to the *sample rate itself* — a single call on an ordinary
+    clip can allocate several GB. Doing the same pitch_shift call on audio
+    downsampled to ``work_rate`` first (an exact, cheap ratio in and out,
+    e.g. 16000/4000 = 4) bounds the internal kernel to ``work_rate``-scale
+    instead, at the cost of losing content above ``work_rate / 2`` Hz during
+    the shift step — acceptable for a conditioning signal, not for playback.
+    """
+    if n_steps == 0:
+        return waveform
+
+    orig_len = waveform.shape[-1]
+    import torchaudio.functional as AF
+
+    down = AF.resample(waveform, orig_freq=sample_rate, new_freq=work_rate)
+    shifted = AF.pitch_shift(down, work_rate, n_steps=n_steps)
+    up = AF.resample(shifted, orig_freq=work_rate, new_freq=sample_rate)
+
+    if up.shape[-1] < orig_len:
+        up = torch.nn.functional.pad(up, (0, orig_len - up.shape[-1]))
+    else:
+        up = up[..., :orig_len]
+    return up
+
+
 def get_bar_intervals(score: Score) -> list[tuple[float, float]]:
     """Compute exact (start_sec, end_sec) time intervals for each bar in the score.
 
@@ -229,8 +263,20 @@ class SoundFontSynthesizer:
         """Randomly select a soundfont from the pool."""
         return random.randrange(len(self._sf2_paths))
 
-    def render_track(self, score: Score, track_idx: int) -> torch.Tensor:
-        """Render a single track into a mono audio waveform using SoundFont samples."""
+    @property
+    def soundfont_names(self) -> list[str]:
+        """Filenames of every soundfont discovered in the pool, in stable order."""
+        return [p.name for p in self._sf2_paths]
+
+    def render_track(self, score: Score, track_idx: int, sf2_index: int | None = None) -> torch.Tensor:
+        """Render a single track into a mono audio waveform using SoundFont samples.
+
+        Args:
+            sf2_index: If given, render deterministically with this soundfont
+                (index into ``self.soundfont_names``) instead of picking one
+                at random. Used by the pre-synthesis cache builder to cover
+                every soundfont for every track.
+        """
         if track_idx >= len(score.tracks):
             return torch.zeros(int(self.sample_rate * 1.0))
 
@@ -246,7 +292,7 @@ class SoundFontSynthesizer:
         # Reset and pick soundfont
         synth.system_reset()
         channel = 0
-        sf2_idx = self._pick_sf2_index()
+        sf2_idx = sf2_index if sf2_index is not None else self._pick_sf2_index()
         sfont_id = self._load_sf2(sf2_idx)
 
         is_drum = track.track_type == "drum"

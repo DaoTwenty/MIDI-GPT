@@ -67,30 +67,42 @@ def build_tokenizer() -> tuple[Tokenizer, list[int]]:
 def compute_loss_manually(
     model: GPT2LMHeadModel,
     adapter: AudioToMidiAdapter,
+    extractor,
     sample: dict,
 ) -> torch.Tensor:
-    """Forward pass + loss without Lightning."""
+    """Forward pass + loss without Lightning.
+
+    Mirrors AudioConditionedLightningModule._extract_soft_replacements: the
+    dataset only hands back raw waveforms, extraction happens here.
+    """
     input_ids = sample["input_ids"].unsqueeze(0)
     labels = sample["labels"].unsqueeze(0)
 
     soft_replacements = None
-    bar_frames_list = sample.get("context_bar_frames", [])
-    track_frames_list = sample.get("track_frames", [])
+    waveforms = sample.get("audio_waveforms", [])
+    track_indices = sample.get("audio_track_indices", [])
+    bar_intervals = sample.get("bar_intervals", [])
+    refs = sample.get("audio_bar_refs", [])
+    positions = sample.get("audio_bar_positions", [])
 
-    if bar_frames_list:
+    if waveforms:
         soft_replacements = []
-        track_frames = track_frames_list[0] if track_frames_list else None
-        for b_idx, b_frames in enumerate(bar_frames_list):
-            if b_frames.ndim == 2:
-                b_frames = b_frames.unsqueeze(0)
-            t_frames_in = (
-                track_frames.unsqueeze(0)
-                if (track_frames is not None and track_frames.ndim == 2)
-                else track_frames
-            )
+        sample_rate = extractor.sample_rate
+        max_len = max(w.shape[-1] for w in waveforms)
+        stacked = torch.zeros(len(waveforms), max_len)
+        for i, w in enumerate(waveforms):
+            stacked[i, : w.shape[-1]] = w
+        with torch.no_grad():
+            frames = extractor.extract_frames(stacked, sample_rate=sample_rate)
+        total_duration = max_len / sample_rate
+        track_to_local = {t_idx: i for i, t_idx in enumerate(track_indices)}
+
+        for (t_idx, b_idx), pos_idx in zip(refs, positions):
+            t_frames = frames[track_to_local[t_idx]]
+            b_frames = extractor.slice_bar_frames(t_frames, total_duration, [bar_intervals[b_idx]])[0]
             with torch.no_grad():
-                soft_emb = adapter(b_frames, track_frames=t_frames_in)
-            soft_replacements.append((b_idx, soft_emb))
+                soft_emb = adapter(b_frames.unsqueeze(0), track_frames=t_frames.unsqueeze(0))
+            soft_replacements.append((0, int(pos_idx), soft_emb))
 
     with torch.no_grad():
         logits, _ = model(input_ids=input_ids, soft_token_replacements=soft_replacements)
@@ -140,7 +152,6 @@ def test_gigamidi_on_the_fly_pipeline(extractor_type: str, weights_path: str | N
     dataset = AudioTransitionDataset(
         scores=[score],
         tokenizer=tokenizer,
-        audio_extractor=extractor,
         num_bars_choices=valid_choices,
         infill_prob=0.5,
         audio_track_prob=0.6,
@@ -151,16 +162,17 @@ def test_gigamidi_on_the_fly_pipeline(extractor_type: str, weights_path: str | N
 
     print(f"  Input token length   : {len(sample['input_ids'])}")
     print(f"  Active loss tokens   : {(sample['labels'] != -100).sum().item()}")
-    print(f"  Context bar frames   : {len(sample['context_bar_frames'])}")
-    if sample["context_bar_frames"]:
-        print(f"  Bar frame shape      : {list(sample['context_bar_frames'][0].shape)}")
+    print(f"  Audio context tracks : {len(sample['audio_waveforms'])}")
+    print(f"  Audio context bars   : {len(sample['audio_bar_refs'])}")
+    if sample["audio_waveforms"]:
+        print(f"  Waveform shape       : {list(sample['audio_waveforms'][0].shape)}")
     print(f"  Mode                 : {'Infill' if sample['is_infill'] else 'Autoregressive'}")
 
     cfg = GPT2Config(vocab_size=vocab_size, n_embd=512, n_layer=2, n_head=4)
     model = GPT2LMHeadModel(cfg).eval()
     adapter = AudioToMidiAdapter(feature_dim=768, model_dim=512, pooling_strategy="perceiver", fusion_strategy="concat").eval()
 
-    loss = compute_loss_manually(model, adapter, sample)
+    loss = compute_loss_manually(model, adapter, extractor, sample)
     print(f"  Loss                 : {loss.item():.4f}")
     assert not torch.isnan(loss), "Loss is NaN!"
     print("✓ GigaMIDI on-the-fly pipeline PASSED!")
@@ -208,7 +220,6 @@ def test_slakh_pre_rendered_stem_pipeline(
     dataset = SlakhPairedStemDataset(
         samples=[{"score": score, "audio_stems": [str(path) for path in stems]}],
         tokenizer=tokenizer,
-        audio_extractor=extractor,
         num_bars_choices=valid_choices,
         transpose_range=(-4, 4),
     )
@@ -217,15 +228,15 @@ def test_slakh_pre_rendered_stem_pipeline(
     sample = dataset[0]
 
     print(f"  Input token length   : {len(sample['input_ids'])}")
-    print(f"  Context bar frames   : {len(sample['context_bar_frames'])}")
-    if sample["context_bar_frames"]:
-        print(f"  Bar frame shape      : {list(sample['context_bar_frames'][0].shape)}")
+    print(f"  Audio context bars   : {len(sample['audio_bar_refs'])}")
+    if sample["audio_waveforms"]:
+        print(f"  Waveform shape       : {list(sample['audio_waveforms'][0].shape)}")
 
     cfg = GPT2Config(vocab_size=vocab_size, n_embd=512, n_layer=2, n_head=4)
     model = GPT2LMHeadModel(cfg).eval()
     adapter = AudioToMidiAdapter(feature_dim=768, model_dim=512).eval()
 
-    loss = compute_loss_manually(model, adapter, sample)
+    loss = compute_loss_manually(model, adapter, extractor, sample)
     print(f"  Loss                 : {loss.item():.4f}")
     assert not torch.isnan(loss), "Loss is NaN!"
     print("✓ Slakh2100 pre-rendered stem pipeline PASSED!")

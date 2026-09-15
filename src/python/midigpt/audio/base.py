@@ -57,28 +57,28 @@ class BaseAudioExtractor(nn.Module, ABC):
 
         return self.forward(audio.squeeze(1))
 
-    def extract_bar_frames(
+    def slice_bar_frames(
         self,
-        audio: torch.Tensor,
-        sample_rate: int,
+        frames: torch.Tensor,
+        total_duration: float,
         bar_intervals: list[tuple[float, float]],
     ) -> list[torch.Tensor]:
-        """Extract sliced temporal frame tensors for each specified bar interval.
+        """Slice an already-computed frame sequence into per-bar segments.
+
+        Split out of ``extract_bar_frames`` so a caller that also needs the
+        whole-track frames (e.g. ``extract_track_frames``, or GPU-side batched
+        extraction across several tracks at once) can compute the forward pass
+        once and reuse it here, instead of forwarding the same audio twice.
 
         Args:
-            audio: Waveform tensor of shape ``(L,)`` or ``(1, L)``.
-            sample_rate: Sample rate of the input waveform.
-            bar_intervals: List of ``(start_time_sec, end_time_sec)`` tuples for each bar.
+            frames: Frame sequence of shape ``(T_total, feature_dim)``.
+            total_duration: Duration in seconds the frame sequence spans.
+            bar_intervals: List of ``(start_time_sec, end_time_sec)`` tuples.
 
         Returns:
-            List of tensors, each shaped ``(T_bar, feature_dim)`` corresponding
-            to the frames within that bar's time window.
+            List of tensors, each shaped ``(T_bar, feature_dim)``.
         """
-        # Get frame sequence for the entire audio: (1, T_total, feature_dim)
-        frames = self.extract_frames(audio, sample_rate=sample_rate).squeeze(0)  # (T_total, D)
-        total_duration = audio.shape[-1] / (sample_rate or self.sample_rate)
         total_frames = frames.shape[0]
-
         if total_frames == 0 or total_duration <= 0:
             return [torch.zeros(1, self.feature_dim, device=frames.device) for _ in bar_intervals]
 
@@ -98,6 +98,27 @@ class BaseAudioExtractor(nn.Module, ABC):
             bar_frames_list.append(bar_slice)
 
         return bar_frames_list
+
+    def extract_bar_frames(
+        self,
+        audio: torch.Tensor,
+        sample_rate: int,
+        bar_intervals: list[tuple[float, float]],
+    ) -> list[torch.Tensor]:
+        """Extract sliced temporal frame tensors for each specified bar interval.
+
+        Args:
+            audio: Waveform tensor of shape ``(L,)`` or ``(1, L)``.
+            sample_rate: Sample rate of the input waveform.
+            bar_intervals: List of ``(start_time_sec, end_time_sec)`` tuples for each bar.
+
+        Returns:
+            List of tensors, each shaped ``(T_bar, feature_dim)`` corresponding
+            to the frames within that bar's time window.
+        """
+        frames = self.extract_frames(audio, sample_rate=sample_rate).squeeze(0)  # (T_total, D)
+        total_duration = audio.shape[-1] / (sample_rate or self.sample_rate)
+        return self.slice_bar_frames(frames, total_duration, bar_intervals)
 
     def extract_track_frames(
         self, audio: torch.Tensor, sample_rate: int | None = None

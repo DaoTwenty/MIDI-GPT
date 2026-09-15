@@ -74,16 +74,27 @@ def _probe_chunk(
         "                continue",
         "        ok.append(i)",
         "    except Exception:",
-        "        ok.append(i)",
+        "        pass",  # unparseable row (e.g. malformed velocity bytes) -- exclude, don't keep
         "print(json.dumps(ok))",
     ])
 
     env = os.environ.copy()
     env["PYTHONPATH"] = ":".join(sys.path)
-    result = subprocess.run(
-        [sys.executable, "-c", script],
-        capture_output=True, text=True, timeout=120, env=env,
-    )
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            capture_output=True, text=True, timeout=120, env=env,
+        )
+    except subprocess.TimeoutExpired:
+        if len(chunk) == 1:
+            # A single row that still hangs at 120s is pathologically slow
+            # (or stuck) to parse -- drop it rather than let it block the
+            # whole shard indefinitely.
+            return []
+        mid = len(chunk) // 2
+        return _probe_chunk(parquet_path, chunk[:mid], valid_ts, min_bars) + _probe_chunk(
+            parquet_path, chunk[mid:], valid_ts, min_bars
+        )
 
     if result.returncode == 0 and result.stdout.strip():
         return json.loads(result.stdout.strip())
@@ -180,6 +191,7 @@ class MidiGPTDatasetBase:
         velocity_off_prob: float = 0.0,
         microtiming_off_prob: float = 0.0,
         genre_probability: float = 1.0,
+        transpose_range: tuple[int, int] = (-6, 6),
     ):
         self._tokenizer = tokenizer
         self._num_bars_choices = num_bars_choices
@@ -195,7 +207,7 @@ class MidiGPTDatasetBase:
         self._velocity_off_prob = velocity_off_prob
         self._microtyping_off_prob = microtiming_off_prob
         self._genre_probability = genre_probability
-        self._transpose_range = (-6, 6)
+        self._transpose_range = transpose_range
         self._velocity_range = (0.8, 1.2)
 
         cfg_dict = json.loads(tokenizer._vocab.config().to_json())
@@ -213,8 +225,18 @@ class MidiGPTDatasetBase:
 
     def prepare_score(
         self, score: Score, is_infill: bool, infill_bar_indices: set[int], idx: int,
+        *, semitones: int = 0, start_bar: int = 0, original_track_indices: list[int] | None = None,
     ) -> tuple[Score, set[int], dict]:
         """Hook for subclasses to augment/mutate the score before encoding.
+
+        ``semitones`` is the transpose shift already applied to the full score
+        before windowing; ``start_bar``/``original_track_indices`` locate this
+        window within the pre-transpose, pre-windowing original score (the
+        bar offset and the original score's track indices, in the order they
+        appear in ``score``). Subclasses that need to align a paired modality
+        (audio stems, pre-synthesized renders) with the resulting window use
+        these to crop/pitch-shift a full-track render instead of re-deriving
+        it from scratch.
 
         Returns (score, infill_bar_indices, extra) where extra is merged into
         the output dict.  Default: no-op.
@@ -235,17 +257,34 @@ class MidiGPTDatasetBase:
 
     def _getitem_inner(self, idx: int) -> dict:
         score = self._load_score(idx)
+        # _load_score returns a reference into an in-memory list shared with
+        # sibling DataLoader workers via fork()'s copy-on-write. Transpose/
+        # VelocityScale/prepare_score all mutate notes/tracks in place, so
+        # without this copy every access permanently dirties that object's
+        # pages in the touching worker, defeating CoW sharing. With
+        # shuffle=True and many workers, that converts progressively more of
+        # the shared dataset into private per-worker copies over the course
+        # of training -- steady, unbounded RSS growth independent of any
+        # single sample's size (see amber OOMs 2026-08-28, ~2.85GB/min,
+        # identical across all training modes and mem limits).
+        score = copy.deepcopy(score)
 
-        score = Transpose(range(self._transpose_range[0], self._transpose_range[1] + 1))(score)
+        semitones = random.choice(range(self._transpose_range[0], self._transpose_range[1] + 1))
+        score = Transpose(semitones)(score)
         score = VelocityScale(self._velocity_range)(score)
 
         is_infill = random.random() < self._infill_prob
         do_mask = self._mask_cfg is not None
 
         # --- Window selection ---
+        # start_bar/original_track_indices locate the window within the
+        # pre-transpose, pre-windowing score, so paired modalities (audio
+        # renders) can be cropped from a cached full-track render.
         window = None
+        start_bar = 0
+        original_track_indices: list[int] | None = None
         if self._window_selection in ("uniform", "weighted"):
-            window = select_window_dispatch(
+            result = select_window_dispatch(
                 score,
                 mode=self._window_selection,
                 num_bars_choices=self._num_bars_choices,
@@ -253,21 +292,30 @@ class MidiGPTDatasetBase:
                 min_tracks=self._min_tracks,
                 min_fill_ratio=self._min_fill_ratio,
                 temperature=self._temperature,
+                return_metadata=True,
             )
+            if result is not None:
+                window, start_bar, original_track_indices = result
         if window is None:
             initial = random.choice(self._num_bars_choices)
             fallbacks = sorted([n for n in self._num_bars_choices if n < initial], reverse=True)
             for n_bars in [initial, *fallbacks]:
                 for n_tracks in range(self._max_tracks, self._min_tracks - 1, -1):
-                    window = select_window(score, n_bars, n_tracks, self._min_fill_ratio)
-                    if window is not None:
+                    result = select_window(
+                        score, n_bars, n_tracks, self._min_fill_ratio, return_metadata=True
+                    )
+                    if result is not None:
+                        window, start_bar, original_track_indices = result
                         break
                 if window is not None:
                     break
         if window is None:
-            window = select_window(
-                score, self._num_bars_choices[-1], self._min_tracks, self._min_fill_ratio
+            result = select_window(
+                score, self._num_bars_choices[-1], self._min_tracks, self._min_fill_ratio,
+                return_metadata=True,
             )
+            if result is not None:
+                window, start_bar, original_track_indices = result
         if window is None:
             raise ValueError(f"Sample {idx}: no valid window found")
 
@@ -287,7 +335,8 @@ class MidiGPTDatasetBase:
 
         # --- Subclass hook: prepare score (audio assignment, features, etc.) ---
         window, infill_bar_indices, extra = self.prepare_score(
-            window, is_infill, infill_bar_indices, idx
+            window, is_infill, infill_bar_indices, idx,
+            semitones=semitones, start_bar=start_bar, original_track_indices=original_track_indices,
         )
 
         if do_mask:

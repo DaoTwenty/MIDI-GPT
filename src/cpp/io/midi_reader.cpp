@@ -17,13 +17,12 @@ Score MidiReader::read(const std::string& path) const {
 }
 
 Score MidiReader::read_bytes(const std::vector<uint8_t>& bytes) const {
-    symusic::Score<symusic::Tick> s;
-    try {
-        s = symusic::Score<symusic::Tick>::parse<::symusic::DataFormat::MIDI>(bytes);
-    } catch (const std::exception& e) {
-        LOG_WARNING("Symusic parse failed, attempting with default parameters: " + std::string(e.what()));
-        s = symusic::Score<symusic::Tick>::parse<::symusic::DataFormat::MIDI>(bytes); // Removed extra args
-    }
+    // parse() is a pure function of `bytes`: a failure here is deterministic
+    // (malformed data, e.g. out-of-range velocity), not transient, so a
+    // second identical call is guaranteed to throw the same exception again.
+    // Let it propagate -- callers (Python-side loaders) already catch and
+    // skip unparseable rows.
+    symusic::Score<symusic::Tick> s = symusic::Score<symusic::Tick>::parse<::symusic::DataFormat::MIDI>(bytes);
     return from_symusic(s);
 }
 

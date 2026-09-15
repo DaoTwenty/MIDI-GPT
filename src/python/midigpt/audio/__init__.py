@@ -1,6 +1,12 @@
 from midigpt.audio.base import BaseAudioExtractor
 from midigpt.audio.muscriptor_extractor import MuScriptorExtractor
-from midigpt.audio.synth import FastAudioSynthesizer, get_bar_intervals
+from midigpt.audio.render_cache import AudioRenderCache
+from midigpt.audio.synth import (
+    FastAudioSynthesizer,
+    SoundFontSynthesizer,
+    get_bar_intervals,
+    safe_pitch_shift,
+)
 from midigpt.audio.yourmt3_extractor import YourMT3Extractor
 
 
@@ -52,6 +58,9 @@ __all__ = [
     "YourMT3Extractor",
     "MuScriptorExtractor",
     "FastAudioSynthesizer",
+    "SoundFontSynthesizer",
+    "AudioRenderCache",
     "get_bar_intervals",
+    "safe_pitch_shift",
     "load_audio_extractor",
 ]
