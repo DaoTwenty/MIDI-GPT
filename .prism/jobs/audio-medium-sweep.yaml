@@ -1,0 +1,42 @@
+name: audio-medium
+# 3-way training-mode ablation (adapter_only / lora / full) fine-tuning
+# yellow_medium for audio conditioning. Each item is a self-chaining job
+# (see scripts/train_audio_medium.sh) -- resubmitting itself via a bare
+# `sbatch` call on timeout or clean-exit-but-incomplete, up to
+# CHAIN_REMAINING=10 links (12h each, ~120h total budget).
+#
+# resources.signal below is required for this to actually work: the script
+# traps USR1 (`trap resubmit_on_timeout USR1`, matching its own
+# `#SBATCH --signal=B:USR1@180`) to resubmit before Slurm's hard kill.
+# PRISM's generated wrapper is what actually gets sbatch'd (not this file
+# directly), so without resources.signal set to match, the payload's own
+# #SBATCH line is a dead comment and PRISM's default TERM-at-120s signal
+# doesn't match what the script's trap listens for -- confirmed live
+# 2026-09-29: all 3 first-link jobs (22028320/21/25) TIMEOUT'd and never
+# resubmitted despite real progress (full reached step 30500, lora 51000,
+# adapter_only 31500). Fixed upstream in prism-hpc (resources.signal field,
+# 65c25ed) -- safe to `prism submit` this spec again now.
+#
+# Do NOT `prism submit` this again for a mode whose chain is still alive
+# (check `squeue -u $USER` for a pending/running job first) -- it would
+# start a second process against the same --output-dir, corrupting/
+# duplicating checkpoints.
+script: bash /scratch/triana24/MIDI-GPT/worktree-audio-conditioning/scripts/train_audio_medium.sh
+args: "{matrix}"
+
+mode: distribute
+matrix:
+  values:
+    - "full"
+    - "lora"
+    - "adapter_only"
+
+resources:
+  gpus: 1
+  # No vram_gb override -- bs16 already sits at 6-24% headroom depending on
+  # mode (see train_audio_medium.sh's own comment), too tight to safely
+  # shrink onto a MIG slice without re-profiling.
+  cpus: 16
+  mem_per_cpu_gb: 8   # 16 cpus x 8G = 128G total, matching the script's own --mem=128G
+  time: "12:00:00"    # nibi H100 partitions cap at 12h before a slower QOS tier
+  signal: "B:USR1@180"  # must match the script's own trap; see note above

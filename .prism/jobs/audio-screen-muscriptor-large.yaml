@@ -1,0 +1,18 @@
+name: audio-screen-muscriptor-large
+# One-off addition to the Stage 1 extractor screen (see audio-screen.yaml) --
+# submitted separately rather than re-running audio-screen.yaml with an
+# expanded matrix, which would resubmit the other 8 already-running items
+# as duplicates. Same script, same fixed data/training-mode/step-budget.
+script: bash /scratch/triana24/MIDI-GPT/worktree-audio-conditioning/scripts/train_audio_screen.sh
+args: "{matrix}"
+
+mode: distribute
+matrix:
+  values:
+    - "muscriptor-large"
+
+resources:
+  gpus: 1
+  cpus: 12
+  mem_per_cpu_gb: 6
+  time: "03:00:00"

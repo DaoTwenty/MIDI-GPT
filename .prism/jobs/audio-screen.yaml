@@ -1,0 +1,38 @@
+name: audio-screen
+# Stage 1 of the audio-extractor research plan: short adapter_only screens
+# across all 8 real audio extractors (transcription-class: yourmt3,
+# muscriptor, mert, sheetsage2; embedding/latent-class: dac, muq,
+# music2latent, same), same data/training-mode/step-budget held fixed, to
+# rank extractors before committing a full training-mode x data sweep to
+# the top 2-3. See scripts/train_audio_screen.sh for the per-name
+# (venv, extractor, weights, model-size) lookup table -- matrix values are
+# short names (not compound strings) so distribute mode's auto-generated
+# per-item job labels (<name>-<value>) stay readable.
+#
+# Fixed MAX_STEPS=1500 (script default) is the fair unit here: all 8
+# extractors are frozen, so this is an equal number of adapter gradient
+# updates regardless of which extractor feeds it. Per-step FLOPs differ a
+# lot across extractors (58M-param Music2Latent vs. 852M-param SAME-L) --
+# mitigated by a generous, uniform wall-clock budget below rather than
+# per-extractor sizing (distribute mode applies one resources: block to
+# every matrix item; cheap extractors just finish early and exit).
+script: bash /scratch/triana24/MIDI-GPT/worktree-audio-conditioning/scripts/train_audio_screen.sh
+args: "{matrix}"
+
+mode: distribute
+matrix:
+  values:
+    - "yourmt3"
+    - "muscriptor"
+    - "mert"
+    - "sheetsage2"
+    - "dac"
+    - "muq"
+    - "music2latent"
+    - "same"
+
+resources:
+  gpus: 1
+  cpus: 12
+  mem_per_cpu_gb: 6   # 12 x 6 = 72G total
+  time: "03:00:00"

@@ -1,0 +1,200 @@
+defaults:
+  account: def-pasquier_gpu
+  scratch_root: /scratch/triana24
+  venv_path: /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning
+  user: triana24
+
+state:
+  backend: local   # distribute-mode jobs don't use the Gist backend at all
+
+ssh:
+  control_path: ~/.ssh/prism-ctrl/%h
+  connect_timeout: 30
+  control_persist: 1h
+  identity_file: ~/.ssh/computecanada/cc_agent
+
+clusters:
+  # Physical facts (login, gpu, cpu_arch, modules) live in ~/.prism/global.yaml.
+  # Only nibi has ever run this project -- fir isn't set up for it.
+  nibi:
+    enabled: true
+    # Canonical clone lives in /project on nibi, on the `dev` branch -- kept
+    # clean so --snapshot can spawn fresh worktrees from it. The training
+    # script actually runs from the long-lived worktree below.
+    repo_path: /project/6003310/triana24/MIDI-GPT
+    worktrees:
+      feature/audio-conditioning: /scratch/triana24/MIDI-GPT/worktree-audio-conditioning
+    # Note the venv lives under MIDI-GPT/venvs/ (plural), unlike every other
+    # project's MIDI-GPT/venv-<name> -- pre-existing layout, not worth
+    # renaming/breaking just for consistency.
+    venv_path: /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning
+    env:
+      MIDIGPT_CACHE: /scratch/triana24/MIDI-GPT/.midigpt_cache
+      HF_TOKEN: "${HF_TOKEN}"
+    # fluidsynth (needed for pyfluidsynth / SoundFontSynthesizer) was
+    # cross-compiled on fir and transferred via Globus into scratch. Needs
+    # extending, not overwriting, PATH/LD_LIBRARY_PATH -- env_prepend runs
+    # after modules + venv activation and combines with whatever's already
+    # there, unlike env: above. train_audio_medium.sh also sets these itself
+    # (self-contained, same convention as this project's other scripts) --
+    # duplicated here so `prism exec`/`prism debug` get a working fluidsynth
+    # too, not just real training jobs.
+    env_prepend:
+      LD_LIBRARY_PATH: /scratch/triana24/fluidsynth-install/lib64
+      PATH: /scratch/triana24/fluidsynth-install/bin
+    setup:
+      # Idempotent -- the worktree and venv already exist on nibi from prior
+      # manual bootstrap; these guards make `prism install nibi` a safe no-op
+      # rather than requiring it before first use. Not run yet.
+      # A worktree's .git is a plain pointer FILE, not a directory (unlike a
+      # full clone) -- `test -d .../.git` always fails for one, so check the
+      # worktree directory itself instead.
+      - "test -d /scratch/triana24/MIDI-GPT/worktree-audio-conditioning || git -C /project/6003310/triana24/MIDI-GPT worktree add /scratch/triana24/MIDI-GPT/worktree-audio-conditioning feature/audio-conditioning"
+      - "test -d /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning || (module load python/3.11.5 gcc/12.3 cmake/3.31.0 arrow/19.0.1 && python3 -m venv --system-site-packages /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning)"
+      - "module load python/3.11.5 gcc/12.3 cmake/3.31.0 arrow/19.0.1 && source /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning/bin/activate && cd /scratch/triana24/MIDI-GPT/worktree-audio-conditioning && pip install -e '.[train]'"
+
+  # Added 2026-10 for full operational parity — this project originally had NO
+  # fir block (only nibi), so the audio venv was missing on fir. This mirrors the
+  # rorqual block below (shared canonical clone on /scratch, per-branch worktree,
+  # same pyarrow-constraint step-6, same modules). fluidsynth was cross-compiled
+  # on fir and lives at /scratch/triana24/fluidsynth-install, so env_prepend is a
+  # real runtime dependency here (not just documentation as on the new clusters).
+  fir:
+    enabled: true
+    repo_path: /scratch/triana24/MIDI-GPT-canonical
+    worktrees:
+      feature/audio-conditioning: /scratch/triana24/MIDI-GPT/worktree-audio-conditioning
+    venv_path: /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning
+    env:
+      TMPDIR: /scratch/triana24/.tmp
+      PIP_CACHE_DIR: /scratch/triana24/.cache/pip
+      XDG_CACHE_HOME: /scratch/triana24/.cache
+      MIDIGPT_CACHE: /scratch/triana24/MIDI-GPT/.midigpt_cache
+      HF_HOME: /scratch/triana24/MIDI-GPT/.hf_cache
+      HF_TOKEN: "${HF_TOKEN}"
+      WANDB_API_KEY: ${WANDB_API_KEY}
+    env_prepend:
+      LD_LIBRARY_PATH: /scratch/triana24/fluidsynth-install/lib64
+      PATH: /scratch/triana24/fluidsynth-install/bin
+    setup:
+      - "mkdir -p /scratch/triana24/.tmp /scratch/triana24/.cache/pip /scratch/triana24/.cache /scratch/triana24/MIDI-GPT/venvs"
+      - "test -d /scratch/triana24/MIDI-GPT-canonical/.git || GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=accept-new' git clone git@github.com:DaoTwenty/MIDI-GPT-private.git /scratch/triana24/MIDI-GPT-canonical"
+      - "git -C /scratch/triana24/MIDI-GPT-canonical remote set-url origin git@github.com:DaoTwenty/MIDI-GPT-private.git"
+      - "test -d /scratch/triana24/MIDI-GPT/worktree-audio-conditioning || (GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=accept-new' git -C /scratch/triana24/MIDI-GPT-canonical fetch origin && git -C /scratch/triana24/MIDI-GPT-canonical worktree add /scratch/triana24/MIDI-GPT/worktree-audio-conditioning feature/audio-conditioning)"
+      - "test -d /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning || (module load python/3.11.5 gcc/12.3 cmake/3.31.0 arrow/19.0.1 && python3 -m venv --system-site-packages /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning)"
+      - "module load python/3.11.5 gcc/12.3 cmake/3.31.0 arrow/19.0.1 && source /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning/bin/activate && pip install --upgrade pip"
+      - "module load python/3.11.5 gcc/12.3 cmake/3.31.0 arrow/19.0.1 && source /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning/bin/activate && cd /scratch/triana24/MIDI-GPT/worktree-audio-conditioning && printf 'pyarrow==%s\\n' \"$(python3 -c 'import pyarrow; print(pyarrow.__version__)')\" > /scratch/triana24/.tmp/pyarrow_constraint.txt && pip install -e '.[train]' -c /scratch/triana24/.tmp/pyarrow_constraint.txt"
+
+  # ── Three additional Alliance clusters (2026-10). ──
+  # This project had no fir block to copy; these are built from nibi's block
+  # but re-homed onto /scratch (like the other two projects' fir blocks) with
+  # a shared canonical clone + per-branch worktree, since the new clusters have
+  # no /project clone. Module versions discovered via `module spider`: fir's
+  # combo (python/3.11.5 gcc/12.3 cmake/3.31.0 arrow/19.0.1) exists on all of
+  # rorqual/narval/trillium.
+  #
+  # WARNING — fluidsynth: this project's runtime needs the fluidsynth shared
+  # library that was cross-compiled and Globus-transferred ONLY onto fir/nibi
+  # scratch (/scratch/triana24/fluidsynth-install). It does NOT exist on these
+  # three clusters yet. `pip install -e` and importing midigpt._core don't need
+  # it (it's a runtime .so for pyfluidsynth), so install/build will still
+  # succeed — but any audio synthesis job will fail until fluidsynth is
+  # transferred here. The env_prepend below is kept (pointing at the expected
+  # path) to document the requirement; it's harmless while the dir is absent.
+  rorqual:
+    enabled: true
+    repo_path: /scratch/triana24/MIDI-GPT-canonical
+    worktrees:
+      feature/audio-conditioning: /scratch/triana24/MIDI-GPT/worktree-audio-conditioning
+    venv_path: /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning
+    env:
+      TMPDIR: /scratch/triana24/.tmp
+      PIP_CACHE_DIR: /scratch/triana24/.cache/pip
+      XDG_CACHE_HOME: /scratch/triana24/.cache
+      MIDIGPT_CACHE: /scratch/triana24/MIDI-GPT/.midigpt_cache
+      HF_HOME: /scratch/triana24/MIDI-GPT/.hf_cache
+      HF_TOKEN: "${HF_TOKEN}"
+      WANDB_API_KEY: ${WANDB_API_KEY}
+    env_prepend:
+      LD_LIBRARY_PATH: /scratch/triana24/fluidsynth-install/lib64
+      PATH: /scratch/triana24/fluidsynth-install/bin
+    setup:
+      - "mkdir -p /scratch/triana24/.tmp /scratch/triana24/.cache/pip /scratch/triana24/.cache /scratch/triana24/MIDI-GPT/venvs"
+      - "test -d /scratch/triana24/MIDI-GPT-canonical/.git || GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=accept-new' git clone git@github.com:DaoTwenty/MIDI-GPT-private.git /scratch/triana24/MIDI-GPT-canonical"
+      # Some of these clusters had a pre-existing canonical clone whose
+      # origin pointed at the PUBLIC github.com/DaoTwenty/MIDI-GPT.git (no
+      # private feature branches) — which makes the worktree step below fail
+      # with "invalid reference". Force origin to the private repo
+      # (idempotent; a no-op where the clone is already correct).
+      - "git -C /scratch/triana24/MIDI-GPT-canonical remote set-url origin git@github.com:DaoTwenty/MIDI-GPT-private.git"
+      - "test -d /scratch/triana24/MIDI-GPT/worktree-audio-conditioning || (GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=accept-new' git -C /scratch/triana24/MIDI-GPT-canonical fetch origin && git -C /scratch/triana24/MIDI-GPT-canonical worktree add /scratch/triana24/MIDI-GPT/worktree-audio-conditioning feature/audio-conditioning)"
+      - "test -d /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning || (module load python/3.11.5 gcc/12.3 cmake/3.31.0 arrow/19.0.1 && python3 -m venv --system-site-packages /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning)"
+      - "module load python/3.11.5 gcc/12.3 cmake/3.31.0 arrow/19.0.1 && source /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning/bin/activate && pip install --upgrade pip"
+      - "module load python/3.11.5 gcc/12.3 cmake/3.31.0 arrow/19.0.1 && source /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning/bin/activate && cd /scratch/triana24/MIDI-GPT/worktree-audio-conditioning && printf 'pyarrow==%s\\n' \"$(python3 -c 'import pyarrow; print(pyarrow.__version__)')\" > /scratch/triana24/.tmp/pyarrow_constraint.txt && pip install -e '.[train]' -c /scratch/triana24/.tmp/pyarrow_constraint.txt"
+
+  narval:
+    # zen2/A100 — older hardware, same CVMFS module stack as fir. Native
+    # midigpt._core compile (zen2 -march) is the main build risk.
+    enabled: true
+    repo_path: /scratch/triana24/MIDI-GPT-canonical
+    worktrees:
+      feature/audio-conditioning: /scratch/triana24/MIDI-GPT/worktree-audio-conditioning
+    venv_path: /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning
+    env:
+      TMPDIR: /scratch/triana24/.tmp
+      PIP_CACHE_DIR: /scratch/triana24/.cache/pip
+      XDG_CACHE_HOME: /scratch/triana24/.cache
+      MIDIGPT_CACHE: /scratch/triana24/MIDI-GPT/.midigpt_cache
+      HF_HOME: /scratch/triana24/MIDI-GPT/.hf_cache
+      HF_TOKEN: "${HF_TOKEN}"
+      WANDB_API_KEY: ${WANDB_API_KEY}
+    env_prepend:
+      LD_LIBRARY_PATH: /scratch/triana24/fluidsynth-install/lib64
+      PATH: /scratch/triana24/fluidsynth-install/bin
+    setup:
+      - "mkdir -p /scratch/triana24/.tmp /scratch/triana24/.cache/pip /scratch/triana24/.cache /scratch/triana24/MIDI-GPT/venvs"
+      - "test -d /scratch/triana24/MIDI-GPT-canonical/.git || GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=accept-new' git clone git@github.com:DaoTwenty/MIDI-GPT-private.git /scratch/triana24/MIDI-GPT-canonical"
+      # Some of these clusters had a pre-existing canonical clone whose
+      # origin pointed at the PUBLIC github.com/DaoTwenty/MIDI-GPT.git (no
+      # private feature branches) — which makes the worktree step below fail
+      # with "invalid reference". Force origin to the private repo
+      # (idempotent; a no-op where the clone is already correct).
+      - "git -C /scratch/triana24/MIDI-GPT-canonical remote set-url origin git@github.com:DaoTwenty/MIDI-GPT-private.git"
+      - "test -d /scratch/triana24/MIDI-GPT/worktree-audio-conditioning || (GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=accept-new' git -C /scratch/triana24/MIDI-GPT-canonical fetch origin && git -C /scratch/triana24/MIDI-GPT-canonical worktree add /scratch/triana24/MIDI-GPT/worktree-audio-conditioning feature/audio-conditioning)"
+      - "test -d /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning || (module load python/3.11.5 gcc/12.3 cmake/3.31.0 arrow/19.0.1 && python3 -m venv --system-site-packages /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning)"
+      - "module load python/3.11.5 gcc/12.3 cmake/3.31.0 arrow/19.0.1 && source /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning/bin/activate && pip install --upgrade pip"
+      - "module load python/3.11.5 gcc/12.3 cmake/3.31.0 arrow/19.0.1 && source /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning/bin/activate && cd /scratch/triana24/MIDI-GPT/worktree-audio-conditioning && printf 'pyarrow==%s\\n' \"$(python3 -c 'import pyarrow; print(pyarrow.__version__)')\" > /scratch/triana24/.tmp/pyarrow_constraint.txt && pip install -e '.[train]' -c /scratch/triana24/.tmp/pyarrow_constraint.txt"
+
+  trillium:
+    # zen5/h100. Air-gapped compute nodes (internet_access: false in
+    # global.yaml) + srun disallowed on the login node — PRISM auto-routes the
+    # internet-needing setup steps (git clone / pip) to the login node.
+    enabled: true
+    repo_path: /scratch/triana24/MIDI-GPT-canonical
+    worktrees:
+      feature/audio-conditioning: /scratch/triana24/MIDI-GPT/worktree-audio-conditioning
+    venv_path: /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning
+    env:
+      TMPDIR: /scratch/triana24/.tmp
+      PIP_CACHE_DIR: /scratch/triana24/.cache/pip
+      XDG_CACHE_HOME: /scratch/triana24/.cache
+      MIDIGPT_CACHE: /scratch/triana24/MIDI-GPT/.midigpt_cache
+      HF_HOME: /scratch/triana24/MIDI-GPT/.hf_cache
+      HF_TOKEN: "${HF_TOKEN}"
+      WANDB_API_KEY: ${WANDB_API_KEY}
+    env_prepend:
+      LD_LIBRARY_PATH: /scratch/triana24/fluidsynth-install/lib64
+      PATH: /scratch/triana24/fluidsynth-install/bin
+    setup:
+      - "mkdir -p /scratch/triana24/.tmp /scratch/triana24/.cache/pip /scratch/triana24/.cache /scratch/triana24/MIDI-GPT/venvs"
+      - "test -d /scratch/triana24/MIDI-GPT-canonical/.git || GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=accept-new' git clone git@github.com:DaoTwenty/MIDI-GPT-private.git /scratch/triana24/MIDI-GPT-canonical"
+      # Some of these clusters had a pre-existing canonical clone whose
+      # origin pointed at the PUBLIC github.com/DaoTwenty/MIDI-GPT.git (no
+      # private feature branches) — which makes the worktree step below fail
+      # with "invalid reference". Force origin to the private repo
+      # (idempotent; a no-op where the clone is already correct).
+      - "git -C /scratch/triana24/MIDI-GPT-canonical remote set-url origin git@github.com:DaoTwenty/MIDI-GPT-private.git"
+      - "test -d /scratch/triana24/MIDI-GPT/worktree-audio-conditioning || (GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=accept-new' git -C /scratch/triana24/MIDI-GPT-canonical fetch origin && git -C /scratch/triana24/MIDI-GPT-canonical worktree add /scratch/triana24/MIDI-GPT/worktree-audio-conditioning feature/audio-conditioning)"
+      - "test -d /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning || (module load python/3.11.5 gcc/12.3 cmake/3.31.0 arrow/19.0.1 && python3 -m venv --system-site-packages /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning)"
+      - "module load python/3.11.5 gcc/12.3 cmake/3.31.0 arrow/19.0.1 && source /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning/bin/activate && pip install --upgrade pip"
+      - "module load python/3.11.5 gcc/12.3 cmake/3.31.0 arrow/19.0.1 && source /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning/bin/activate && cd /scratch/triana24/MIDI-GPT/worktree-audio-conditioning && printf 'pyarrow==%s\\n' \"$(python3 -c 'import pyarrow; print(pyarrow.__version__)')\" > /scratch/triana24/.tmp/pyarrow_constraint.txt && pip install -e '.[train]' -c /scratch/triana24/.tmp/pyarrow_constraint.txt"
