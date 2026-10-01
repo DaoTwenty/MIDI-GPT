@@ -1,117 +1,136 @@
-"""MuScriptor continuous audio transcription feature extractor."""
+"""Real MuScriptor decoder-only feature extractor.
+
+Wraps the actual pretrained MuScriptor checkpoint (arXiv:2607.08168,
+Kyutai x Mirelo, https://github.com/muscriptor/muscriptor, PyPI package
+``muscriptor``) via that package's own ``LMModel`` -- not a hand-vendored
+reimplementation.
+
+MuScriptor has no separate encoder: it is a single causal decoder stack.
+At inference the mel-spectrogram is linearly projected to the model's
+latent dim and used, together with instrument/dataset class embeddings, as
+a PREFIX prepended to the token stream (see ``muscriptor.models.lm.LMModel
+.forward``): the real prepend order is
+``[mel frames][dataset_name][instrument_group][tokens]`` (mel frames occupy
+the *earliest* positions -- they are prepended *last* in that loop, which
+puts them leftmost). Because attention is strictly causal, the hidden
+states at the mel-frame positions are mathematically identical whether or
+not any class conditioning or tokens are appended afterward: later
+positions can never influence earlier ones. So a correct "encoder-only"
+read of MuScriptor's audio features needs nothing but the mel-spectrogram
+conditioner and a prefix-only forward pass through the transformer
+stack -- no instrument/dataset conditioning and no token embedding are
+required to get bit-identical results at those positions.
+"""
 
 from __future__ import annotations
 
-import math
-from typing import Optional
-
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 
 from midigpt.audio.base import BaseAudioExtractor
-from midigpt.audio.yourmt3_extractor import SpectrogramFrontend
+
+_SAMPLE_RATE = 16000
+_FRAME_RATE = 100
+_HOP_LENGTH = _SAMPLE_RATE // _FRAME_RATE  # 160
+_MODEL_SIZES = ("small", "medium", "large")
+_DEFAULT_MODEL_SIZE = "medium"
 
 
 class MuScriptorExtractor(BaseAudioExtractor):
-    """MuScriptor audio transcription feature extractor.
+    """Extracts MuScriptor's decoder hidden states at the mel-spectrogram
+    prefix positions.
 
-    Wraps MuScriptor's acoustic encoder module to extract continuous frame-level
-    embeddings over audio stems.
+    Loads the real ``muscriptor`` package's ``LMModel`` (via
+    ``muscriptor.TranscriptionModel.load_model``, which downloads/locates
+    the checkpoint, builds the exact architecture from its ``config.json``,
+    and does a *strict* ``load_state_dict`` -- any key mismatch raises
+    immediately instead of silently dropping weights) and runs only its
+    mel-spectrogram conditioner + transformer blocks, stopping after
+    ``layer`` blocks (default: all of them, i.e. the same residual stream
+    MuScriptor's own LM head reads from).
+
+    Requires the ``muscriptor`` PyPI package (``pip install muscriptor``);
+    imported lazily so it stays an optional dependency, matching this
+    module's existing ``huggingface_hub``/``safetensors`` convention.
     """
 
     def __init__(
         self,
-        feature_dim: int = 768,
-        n_mels: int = 256,
-        n_layers: int = 8,
-        n_heads: int = 8,
-        sample_rate: int = 22050,
-        hop_length: int = 256,
-        checkpoint_path: str | None = None,
+        model_size: str = _DEFAULT_MODEL_SIZE,
+        weights_path: str | None = None,
+        layer: int = -1,
+        device: str | None = None,
+        dtype: str | None = None,
     ):
-        super().__init__(feature_dim=feature_dim, sample_rate=sample_rate, hop_length=hop_length)
-        self.frontend = SpectrogramFrontend(
-            sample_rate=sample_rate,
-            n_fft=1024,
-            hop_length=hop_length,
-            n_mels=n_mels,
-        )
-        self.input_conv = nn.Sequential(
-            nn.Conv1d(n_mels, feature_dim, kernel_size=3, padding=1),
-            nn.GELU(),
-            nn.Conv1d(feature_dim, feature_dim, kernel_size=3, padding=1),
-        )
+        if model_size not in _MODEL_SIZES:
+            raise ValueError(f"model_size must be one of {_MODEL_SIZES}, got {model_size!r}")
 
-        encoder_layer = nn.TransformerEncoderLayer(
-            d_model=feature_dim,
-            nhead=n_heads,
-            dim_feedforward=4 * feature_dim,
-            dropout=0.0,
-            activation="gelu",
-            batch_first=True,
-            norm_first=True,
-        )
-        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=n_layers)
-        self.ln_out = nn.LayerNorm(feature_dim)
+        try:
+            from muscriptor import TranscriptionModel
+        except ImportError as e:
+            raise ImportError(
+                "MuScriptorExtractor requires the 'muscriptor' package: "
+                "pip install muscriptor"
+            ) from e
 
-        if checkpoint_path is not None:
-            self.load_pretrained(checkpoint_path)
+        transcription_model = TranscriptionModel.load_model(
+            weights_path=weights_path or model_size, device=device, dtype=dtype
+        )
+        # TranscriptionModel doesn't expose its LMModel publicly; ._model is the
+        # only handle onto it. Reaching past the public API here (rather than
+        # reimplementing _build_model/_resolve_config ourselves) keeps the
+        # download/config-resolution/strict-load logic single-sourced from the
+        # muscriptor package instead of duplicated and liable to drift from it.
+        lm = transcription_model._model
+        num_layers = len(lm.transformer.layers)
+        resolved_layer = num_layers if layer in (-1, None) else layer
+        if not (0 < resolved_layer <= num_layers):
+            raise ValueError(f"layer must be in [1, {num_layers}] (or -1 for last), got {layer}")
+
+        super().__init__(feature_dim=lm.dim, sample_rate=_SAMPLE_RATE, hop_length=_HOP_LENGTH)
+        self.lm = lm
+        self.model_size = model_size
+        self.layer = resolved_layer
+        self.num_layers = num_layers
 
     def forward(self, audio: torch.Tensor) -> torch.Tensor:
-        """Extract frame-level hidden states from audio waveform."""
-        # Frontend: (B, L) -> (B, T, n_mels)
-        mel = self.frontend(audio)
-        # Conv: (B, n_mels, T) -> (B, D, T) -> (B, T, D)
-        x = self.input_conv(mel.transpose(1, 2)).transpose(1, 2)
-        h = self.encoder(x)
-        h = self.ln_out(h)
-        return h
+        """Extract decoder hidden states at the mel-spectrogram prefix positions.
 
-    def load_pretrained(self, checkpoint_path: str) -> None:
-        """Load pretrained weights from a local file (.pt, .safetensors, .ckpt)."""
-        if checkpoint_path.endswith(".safetensors"):
-            import safetensors.torch
-            state = safetensors.torch.load_file(checkpoint_path)
-        else:
-            state = torch.load(checkpoint_path, map_location="cpu")
+        Args:
+            audio: (B, L) waveform at self.sample_rate (16kHz).
 
-        if "state_dict" in state:
-            state = state["state_dict"]
+        Returns:
+            (B, T, feature_dim) residual-stream activations after ``self.layer``
+            transformer blocks, T = number of 100Hz mel frames covering L samples.
+            When ``self.layer == self.num_layers`` (the default), this is exactly
+            the input MuScriptor's own LM head would see at those positions.
+        """
+        from muscriptor.modules.conditioners import WavCondition
+        from muscriptor.modules.transformer import create_sin_embedding
 
-        enc_state = {k.replace("encoder.", "").replace("model.", ""): v for k, v in state.items() if "encoder" in k or "input_conv" in k}
-        if enc_state:
-            self.load_state_dict(enc_state, strict=False)
-        else:
-            self.load_state_dict(state, strict=False)
+        B, L = audio.shape
+        device = self.lm.emb.weight.device
+        wav = audio.to(device).unsqueeze(1)  # (B, 1, L)
+        length = torch.full((B,), L, device=device, dtype=torch.long)
 
-    @classmethod
-    def from_pretrained(
-        cls,
-        model_name_or_path: str,
-        feature_dim: int = 768,
-        device: str | None = None,
-    ) -> "MuScriptorExtractor":
-        """Load a MuScriptor extractor from a local checkpoint path or HuggingFace Hub repo ID."""
-        import os
+        mel_cond = self.lm.condition_provider.conditioners["self_wav"]
 
-        if os.path.exists(model_name_or_path):
-            ckpt_path = model_name_or_path
-        else:
-            try:
-                from huggingface_hub import hf_hub_download
-                for fname in ["model.safetensors", "pytorch_model.bin", "model.ckpt"]:
-                    try:
-                        ckpt_path = hf_hub_download(repo_id=model_name_or_path, filename=fname)
-                        break
-                    except Exception:
-                        continue
-                else:
-                    raise FileNotFoundError(f"Could not resolve weights for {model_name_or_path}")
-            except Exception as e:
-                raise ValueError(f"Failed to load checkpoint from {model_name_or_path}: {e}") from e
+        with self.lm.autocast:
+            embeds, _mask = mel_cond(
+                WavCondition(wav=wav, length=length, sample_rate=[self.sample_rate] * B)
+            )
+            x = embeds.to(self.lm.emb.weight.dtype)
 
-        instance = cls(feature_dim=feature_dim, checkpoint_path=ckpt_path)
-        if device is not None:
-            instance = instance.to(device)
-        return instance
+            T = x.shape[1]
+            positions = torch.arange(T, device=x.device).view(1, -1, 1)
+            pos_emb = create_sin_embedding(
+                positions, x.shape[-1], max_period=self.lm.transformer.max_period, dtype=torch.float32
+            ).to(x.dtype)
+            x = x + pos_emb
+
+            for block in self.lm.transformer.layers[: self.layer]:
+                x = block(x, model_state=None)
+
+            if self.layer == self.num_layers:
+                x = self.lm.out_norm(x)
+
+        return x

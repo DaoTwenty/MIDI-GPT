@@ -35,6 +35,101 @@ dev       = ["pytest>=8.0", "ruff>=0.4", "mypy>=1.9"]
 docs      = ["mkdocs-material>=9.5", "mkdocstrings[python]>=0.24"]
 realtime  = ["midigpt[inference]", "python-osc>=1.8", "flask>=3.0", "flask-socketio>=5.3"]
 http      = ["midigpt[inference]", "fastapi>=0.111", "uvicorn[standard]>=0.29"]
+muscriptor = ["midigpt[inference]", "muscriptor>=0.3"]
+
+# Pinned exactly, not a range: vendored T5EncoderYMT3
+# (audio/vendor/yourmt3/t5mod.py) calls internal T5 forward-pass APIs
+# (cache_position handling, per-layer output tuple shape, ModuleUtilsMixin
+# methods dropped in 5.x) that drifted incompatibly even within the 4.x line
+# -- 4.57.6 changes both vs. what this code expects. 4.45.1 is what
+# huggingface.co/spaces/mimbres/YourMT3 (the actual source this was vendored
+# from) itself pins in its requirements.txt -- match it exactly rather than
+# patching the vendored code to chase a moving target.
+# yourmt3's transformers==4.45.1 pin (see comment above) is incompatible with
+# MERT-v2's shipped modeling_mert2.py, which targets 4.53.2 (its own config.json
+# records this) and needs the newer AutoModel attn-implementation dispatch
+# (config._attn_implementation) the vendored T5EncoderYMT3 predates -- kept as
+# a separate extra rather than reconciled into one version. No einops needed:
+# modeling_mert2.py only imports torch/torchaudio/transformers.
+mert       = ["midigpt[inference]", "transformers>=4.53", "torchaudio>=2.6"]
+# Pinned exactly, independent of the 'mert' extra: modeling_sheetsage2.py's
+# BartDecoder usage (BartDecoder.__init__(embed_tokens=...)) broke against
+# transformers>=4.53 -- confirmed empirically (TypeError: unexpected keyword
+# argument 'embed_tokens') -- so riding on midigpt[mert]'s >=4.53 pin (as
+# originally assumed here) doesn't actually work. SheetSage2's own
+# requirements.txt pins transformers==4.45.2 exactly; use that instead, even
+# though it shares modeling_mert2.py with MERTExtractor (sha256-verified
+# against MERT-v2-FullSong at load time) --
+# scripts/verify_sheetsage2_extractor.py is the source of truth for whether
+# that shared encoder code also loads fine at 4.45.2.
+# mir_eval is needed at import time: modeling_sheetsage2.py unconditionally
+# imports tokenization_sheetsage2.py (to build SheetSage2Tokenizer in
+# __init__, even for encoder-only use), which unconditionally imports
+# mir_eval.chord. pretty_midi is ALSO needed at import time despite looking
+# transcribe()/generate()-only -- confirmed empirically (ModuleNotFoundError
+# surfaced from SheetSage2Tokenizer construction, not a lazy path) -- so
+# pulling in the rest of SheetSage2's own real requirements.txt (mido, scipy)
+# too rather than re-guessing which of its remaining deps are "really" lazy.
+sheetsage2 = ["midigpt[inference]", "transformers==4.45.2", "torchaudio>=2.6", "mir_eval>=0.8", "pretty_midi>=0.2.10", "mido>=1.3", "scipy>=1.13"]
+yourmt3    = ["midigpt[inference]", "transformers==4.45.1", "einops>=0.7"]
+# DacModel/DacConfig are a first-party transformers integration (no
+# trust_remote_code, no vendoring) -- confirmed present at v4.45.0 and absent
+# at v4.44.0 in the transformers source history, hence the floor below.
+dac        = ["midigpt[inference]", "transformers>=4.45"]
+# Pinned to a narrow window, not just a floor: the real `muq` PyPI package
+# (github.com/tencent-ailab/MuQ, src/muq/muq/models/muq_model.py) calls the
+# transformers built-in `Wav2Vec2ConformerEncoder` directly (not through
+# `Wav2Vec2ConformerModel`) as `self.conformer(x, output_hidden_states=True)`
+# and reads back `out["hidden_states"]`/`out["last_hidden_state"]` -- this
+# only works while `Wav2Vec2ConformerEncoder.forward` itself still accepts
+# `output_hidden_states` and collects the tuple; confirmed present in
+# transformers' own git history at v4.53.2 (matching midigpt[mert]'s floor)
+# and confirmed GONE by v4.54.0, where that collection moved into a
+# `@filter_output_hidden_states`-decorated wrapper on the outer
+# `Wav2Vec2ConformerModel` that muq_model.py never calls -- so unlike 'mert'
+# (whose modeling_mert2.py is fully vendored/trust_remote_code and doesn't
+# touch this class at all), 'muq' cannot float past 4.53.x without silently
+# breaking hidden-state/layer-selection. Installing `midigpt[mert,muq]` or
+# `midigpt[dac,muq]` together still resolves fine (4.53.x satisfies both --
+# 'dac' only floors transformers at >=4.45), but `midigpt[muq,sheetsage2]`
+# and `midigpt[muq,yourmt3]` do NOT -- those two pin transformers to exact
+# 4.45.x builds, entirely outside this window; install 'muq' in its own venv
+# if that conflict is hit. torchaudio
+# floor reused from 'mert' (muq's own MelSTFT frontend only needs
+# torchaudio.transforms.MelSpectrogram/AmplitudeToDB, both long-stable
+# APIs); librosa/nnAudio/easydict/x_clip/soundfile are muq's own real
+# requirements.txt deps, pulled in transitively by `pip install muq` itself
+# (nnAudio/x_clip are only reached by muq_mulan's contrastive sibling model,
+# never imported for our encoder-only use, but `import muq` unconditionally
+# imports that submodule too).
+# Deps straight from the real package's requirements.txt/PyPI metadata
+# (github.com/SonyCSLParis/music2latent, music2latent/requirements.txt):
+# numpy, soundfile, huggingface_hub, torch>=2.0.1 -- no transformers/torchaudio
+# dependency at all (it isn't a transformer, and does its own STFT via
+# torch.stft rather than torchaudio), so unlike 'mert'/'dac'/'muq' this pulls
+# in no version pin that conflicts with any other extra here. soundfile is
+# the one genuinely new dependency; everything else already satisfied by
+# midigpt[inference]'s own floors.
+music2latent = ["midigpt[inference]", "music2latent>=0.1.8", "soundfile>=0.12"]
+muq        = ["midigpt[inference]", "muq>=0.1.0", "transformers>=4.53,<4.54", "torchaudio>=2.6"]
+# 'stable_audio_3' (the actual companion repo to Stable Audio 3 / SAME,
+# github.com/Stability-AI/stable-audio-3) is NOT on PyPI -- confirmed via
+# `pip index versions stable-audio-3` (no matching distribution) -- so unlike
+# every other extra here (all ordinary PyPI packages), this is a git+https
+# direct reference. Its own pyproject.toml (fetched and read directly, not
+# guessed) hard-pins torch==2.7.1/torchaudio==2.7.1 exactly and requires
+# transformers>=5.8.0, huggingface-hub>=1.7.1 -- all *stricter* than what we
+# declare below, and since pip resolves stable_audio_3's own declared deps
+# transitively, installing 'same' pins the whole environment to those exact
+# versions regardless. This directly conflicts with 'yourmt3''s exact
+# transformers==4.45.1 pin and 'sheetsage2''s exact transformers==4.45.2 pin
+# (midigpt[same,yourmt3] / midigpt[same,sheetsage2] cannot be installed
+# together) and is a major-version jump past what 'mert'/'muq' were verified
+# against (transformers>=4.53,<4.54 window) even though >=4.53 technically
+# admits 5.8 -- install 'same' in its own venv if running alongside those
+# extras. huggingface-hub>=1.7.1 similarly supersedes midigpt[inference]'s
+# own >=0.22 floor for the whole environment once installed.
+same       = ["midigpt[inference]", "stable-audio-3 @ git+https://github.com/Stability-AI/stable-audio-3.git"]
 all       = ["midigpt[realtime,train]"]
 
 [project.scripts]

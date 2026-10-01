@@ -146,8 +146,15 @@ def parse_args():
     parser.add_argument("--slakh-max-samples", type=int, default=0, help="Limit Slakh2100 tracks used (0=all)")
 
     # Audio Extractor CLI arguments
-    parser.add_argument("--audio-extractor", type=str, default="muscriptor", choices=["yourmt3", "yourmt3+", "muscriptor"])
+    parser.add_argument(
+        "--audio-extractor", type=str, default="muscriptor",
+        choices=["yourmt3", "yourmt3+", "muscriptor", "mert", "mert2", "sheetsage2", "sheetsage",
+                 "dac", "muq", "music2latent", "same"],
+    )
     parser.add_argument("--audio-weights", type=str, default=None, help="Path to pretrained weights or HuggingFace Hub repo ID")
+    parser.add_argument("--model-size", type=str, default=None,
+                         help="Extractor variant/size where applicable: muscriptor {small,medium,large}, "
+                              "mert/sheetsage2 {fullsong,30s}, dac {16khz,24khz,44khz}, same {same-l,same-s}")
     parser.add_argument("--feature-dim", type=int, default=768)
 
     # Synthesis CLI arguments
@@ -333,13 +340,14 @@ def main():
     extractor = load_audio_extractor(
         extractor_type=args.audio_extractor,
         weights_path=args.audio_weights,
+        model_size=args.model_size,
         feature_dim=args.feature_dim,
     )
     print(f"  Loaded {args.audio_extractor} (feature_dim={extractor.feature_dim})")
 
     print("\n  Building Audio-to-MIDI Adapter...")
     adapter = AudioToMidiAdapter(
-        feature_dim=args.feature_dim,
+        feature_dim=extractor.feature_dim,
         model_dim=model_dim,
         num_tokens_per_bar=args.tokens_per_bar,
         pooling_strategy=args.pooling,

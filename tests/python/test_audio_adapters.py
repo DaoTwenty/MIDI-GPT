@@ -17,7 +17,7 @@ from midigpt.adapters.pooling import (
 )
 from midigpt.audio.synth import FastAudioSynthesizer, get_bar_intervals
 from midigpt.audio.yourmt3_extractor import YourMT3Extractor
-from midigpt.audio.muscriptor_extractor import MuScriptorExtractor
+from midigpt.audio.generic_proxy_extractor import GenericProxyAudioExtractor
 
 
 def test_fast_audio_synthesizer_and_bar_intervals():
@@ -62,8 +62,8 @@ def test_yourmt3_extractor():
     assert bar_frames[0].shape[-1] == 128
 
 
-def test_muscriptor_extractor():
-    extractor = MuScriptorExtractor(feature_dim=128, n_mels=64, n_layers=2, n_heads=4)
+def test_generic_proxy_audio_extractor():
+    extractor = GenericProxyAudioExtractor(feature_dim=128, n_mels=64, n_layers=2, n_heads=4)
     dummy_wav = torch.randn(1, 22050)
     frames = extractor.extract_frames(dummy_wav)
     assert frames.ndim == 3
