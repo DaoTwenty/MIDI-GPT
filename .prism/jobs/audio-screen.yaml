@@ -52,6 +52,7 @@ requires_files:
   - "MIDI-GPT/hf_cache/dac_44khz"
   - "MIDI-GPT/data/slakh2100/slakh2100_flac_redux/train"
   - "MIDI-GPT/data/v2.0.0/train"
+  - "MIDI-GPT/worktree-audio-conditioning/soundfonts/FluidR3_GM.sf2"
 requires_imports:          # checked in venv-audio-conditioning (the job's venv) + module env
   - lightning
   - muscriptor
