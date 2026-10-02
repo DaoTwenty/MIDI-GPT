@@ -1,0 +1,60 @@
+#!/bin/bash
+# Build the 4 per-extractor "-check" venvs the audio screen uses
+# (train_audio_screen.sh selects one per extractor; their transformers pins
+# conflict, so they must be separate venvs):
+#   venv-mert-check      .[mert]        (also used by the dac extractor)
+#   venv-sheetsage2-check .[sheetsage2]
+#   venv-muq-check       .[muq]
+#   venv-same-check      .[same]
+#
+# Wired as a PRISM setup step (one line per cluster) so `prism install`
+# reproduces them. Idempotent: skips a venv that already imports its extra.
+#
+# Hard-won recipe details:
+#   --system-site-packages : use Alliance's +computecanada transformers/torch
+#                            wheels instead of rebuilding them.
+#   symusic via --only-binary=:all: : grab the prebuilt Alliance wheel; its
+#                            sdist build does a CMake FetchContent clone of
+#                            3rdparty/Catch2 that fails (and, on an
+#                            inode-tight /scratch, dies with "Disk quota
+#                            exceeded" mid-clone).
+#   scikit-build-core + pybind11 pre-installed + --no-build-isolation : midigpt's
+#                            native _core (CMake) can't see the module pyarrow/
+#                            cmake inside pip's isolated build env otherwise.
+#   rustup default stable : some transitive deps build a Rust sdist (tokenizers).
+#   pyarrow constraint : pin to the Arrow module version so pip never tries to
+#                        build Alliance's dummy pyarrow-noinstall wheel.
+#
+# NOTE each venv is ~tens of thousands of files; needs /scratch inode headroom
+# (Alliance caps /scratch at 1e6 files/user). A cluster already near that limit
+# can't host all 5 audio venvs.
+set -u
+module load python/3.11.5 gcc/12.3 cmake/3.31.0 arrow/19.0.1
+rustup default stable >/dev/null 2>&1 || true
+
+WT=/scratch/triana24/MIDI-GPT/worktree-audio-conditioning
+VD=/scratch/triana24/MIDI-GPT/venvs
+TMP="${TMPDIR:-/scratch/triana24/.tmp}"; mkdir -p "$TMP"
+printf "pyarrow==%s\n" "$(python3 -c 'import pyarrow; print(pyarrow.__version__)')" > "$TMP/pyarrow_constraint.txt"
+
+build() {  # $1 = venv name, $2 = pip extra
+  local v="$1" x="$2"
+  if [ -d "$VD/$v/bin" ] && "$VD/$v/bin/python" -c "import midigpt" 2>/dev/null; then
+    echo "[$v] already present, skipping"; return 0
+  fi
+  echo "[$v] building (.[$x]) ..."
+  python3 -m venv --system-site-packages "$VD/$v"
+  # shellcheck disable=SC1091
+  source "$VD/$v/bin/activate"
+  pip install -q --upgrade pip "scikit-build-core>=0.9" pybind11
+  pip install -q --only-binary=:all: symusic
+  ( cd "$WT" && pip install --no-build-isolation -e ".[$x]" -c "$TMP/pyarrow_constraint.txt" )
+  deactivate 2>/dev/null || true
+  echo "[$v] done"
+}
+
+build venv-mert-check       mert
+build venv-sheetsage2-check  sheetsage2
+build venv-muq-check        muq
+build venv-same-check       same
+echo "setup_audio_check_venvs: all 4 extractor venvs ready"

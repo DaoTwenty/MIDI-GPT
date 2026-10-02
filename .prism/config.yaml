@@ -52,6 +52,10 @@ clusters:
       - "test -d /scratch/triana24/MIDI-GPT/worktree-audio-conditioning || git -C /project/6003310/triana24/MIDI-GPT worktree add /scratch/triana24/MIDI-GPT/worktree-audio-conditioning feature/audio-conditioning"
       - "test -d /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning || (module load python/3.11.5 gcc/12.3 cmake/3.31.0 arrow/19.0.1 && python3 -m venv --system-site-packages /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning)"
       - "module load python/3.11.5 gcc/12.3 cmake/3.31.0 arrow/19.0.1 && source /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning/bin/activate && cd /scratch/triana24/MIDI-GPT/worktree-audio-conditioning && pip install -e '.[train]'"
+      # Per-extractor -check venvs the audio screen selects per extractor
+      # (conflicting transformers pins -> separate venvs). See the script header
+      # for the symusic-wheel / --no-build-isolation / rustup / pyarrow details.
+      - "bash /scratch/triana24/MIDI-GPT/worktree-audio-conditioning/scripts/setup_audio_check_venvs.sh"
 
   # Added 2026-10 for full operational parity — this project originally had NO
   # fir block (only nibi), so the audio venv was missing on fir. This mirrors the
@@ -84,6 +88,10 @@ clusters:
       - "test -d /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning || (module load python/3.11.5 gcc/12.3 cmake/3.31.0 arrow/19.0.1 && python3 -m venv --system-site-packages /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning)"
       - "module load python/3.11.5 gcc/12.3 cmake/3.31.0 arrow/19.0.1 && source /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning/bin/activate && pip install --upgrade pip"
       - "module load python/3.11.5 gcc/12.3 cmake/3.31.0 arrow/19.0.1 && source /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning/bin/activate && cd /scratch/triana24/MIDI-GPT/worktree-audio-conditioning && printf 'pyarrow==%s\\n' \"$(python3 -c 'import pyarrow; print(pyarrow.__version__)')\" > /scratch/triana24/.tmp/pyarrow_constraint.txt && pip install -e '.[train]' -c /scratch/triana24/.tmp/pyarrow_constraint.txt"
+      # Per-extractor -check venvs the audio screen selects per extractor
+      # (conflicting transformers pins -> separate venvs). See the script header
+      # for the symusic-wheel / --no-build-isolation / rustup / pyarrow details.
+      - "bash /scratch/triana24/MIDI-GPT/worktree-audio-conditioning/scripts/setup_audio_check_venvs.sh"
 
   # ── Three additional Alliance clusters (2026-10). ──
   # This project had no fir block to copy; these are built from nibi's block
@@ -131,6 +139,10 @@ clusters:
       - "test -d /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning || (module load python/3.11.5 gcc/12.3 cmake/3.31.0 arrow/19.0.1 && python3 -m venv --system-site-packages /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning)"
       - "module load python/3.11.5 gcc/12.3 cmake/3.31.0 arrow/19.0.1 && source /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning/bin/activate && pip install --upgrade pip"
       - "module load python/3.11.5 gcc/12.3 cmake/3.31.0 arrow/19.0.1 && source /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning/bin/activate && cd /scratch/triana24/MIDI-GPT/worktree-audio-conditioning && printf 'pyarrow==%s\\n' \"$(python3 -c 'import pyarrow; print(pyarrow.__version__)')\" > /scratch/triana24/.tmp/pyarrow_constraint.txt && pip install -e '.[train]' -c /scratch/triana24/.tmp/pyarrow_constraint.txt"
+      # Per-extractor -check venvs the audio screen selects per extractor
+      # (conflicting transformers pins -> separate venvs). See the script header
+      # for the symusic-wheel / --no-build-isolation / rustup / pyarrow details.
+      - "bash /scratch/triana24/MIDI-GPT/worktree-audio-conditioning/scripts/setup_audio_check_venvs.sh"
 
   narval:
     # zen2/A100 — older hardware, same CVMFS module stack as fir. Native
@@ -164,6 +176,10 @@ clusters:
       - "test -d /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning || (module load python/3.11.5 gcc/12.3 cmake/3.31.0 arrow/19.0.1 && python3 -m venv --system-site-packages /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning)"
       - "module load python/3.11.5 gcc/12.3 cmake/3.31.0 arrow/19.0.1 && source /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning/bin/activate && pip install --upgrade pip"
       - "module load python/3.11.5 gcc/12.3 cmake/3.31.0 arrow/19.0.1 && source /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning/bin/activate && cd /scratch/triana24/MIDI-GPT/worktree-audio-conditioning && printf 'pyarrow==%s\\n' \"$(python3 -c 'import pyarrow; print(pyarrow.__version__)')\" > /scratch/triana24/.tmp/pyarrow_constraint.txt && pip install -e '.[train]' -c /scratch/triana24/.tmp/pyarrow_constraint.txt"
+      # Per-extractor -check venvs the audio screen selects per extractor
+      # (conflicting transformers pins -> separate venvs). See the script header
+      # for the symusic-wheel / --no-build-isolation / rustup / pyarrow details.
+      - "bash /scratch/triana24/MIDI-GPT/worktree-audio-conditioning/scripts/setup_audio_check_venvs.sh"
 
   trillium:
     # zen5/h100. Air-gapped compute nodes (internet_access: false in
@@ -198,3 +214,7 @@ clusters:
       - "test -d /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning || (module load python/3.11.5 gcc/12.3 cmake/3.31.0 arrow/19.0.1 && python3 -m venv --system-site-packages /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning)"
       - "module load python/3.11.5 gcc/12.3 cmake/3.31.0 arrow/19.0.1 && source /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning/bin/activate && pip install --upgrade pip"
       - "module load python/3.11.5 gcc/12.3 cmake/3.31.0 arrow/19.0.1 && source /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning/bin/activate && cd /scratch/triana24/MIDI-GPT/worktree-audio-conditioning && printf 'pyarrow==%s\\n' \"$(python3 -c 'import pyarrow; print(pyarrow.__version__)')\" > /scratch/triana24/.tmp/pyarrow_constraint.txt && pip install -e '.[train]' -c /scratch/triana24/.tmp/pyarrow_constraint.txt"
+      # Per-extractor -check venvs the audio screen selects per extractor
+      # (conflicting transformers pins -> separate venvs). See the script header
+      # for the symusic-wheel / --no-build-isolation / rustup / pyarrow details.
+      - "bash /scratch/triana24/MIDI-GPT/worktree-audio-conditioning/scripts/setup_audio_check_venvs.sh"
