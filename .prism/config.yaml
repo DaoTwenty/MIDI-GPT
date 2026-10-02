@@ -186,6 +186,7 @@ clusters:
     # global.yaml) + srun disallowed on the login node — PRISM auto-routes the
     # internet-needing setup steps (git clone / pip) to the login node.
     enabled: true
+    account: def-pasquier   # SciNet: allocation has NO _gpu suffix (vs def-pasquier_gpu on the Alliance clusters)
     repo_path: /scratch/triana24/MIDI-GPT-canonical
     worktrees:
       feature/audio-conditioning: /scratch/triana24/MIDI-GPT/worktree-audio-conditioning
