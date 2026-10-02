@@ -4,6 +4,7 @@ import copy
 import glob as _glob_mod
 import hashlib
 import json
+import os
 import random
 
 import pyarrow as pa
@@ -135,10 +136,27 @@ def _load_or_build_valid_indices(
 
     print(f"  dataset filter: phase 2 — parse+TS validation ({len(candidates)} rows)…", flush=True)
     chunk_size = 500
+    chunks = [candidates[s : s + chunk_size] for s in range(0, len(candidates), chunk_size)]
     valid: list[int] = []
-    for start in range(0, len(candidates), chunk_size):
-        chunk = candidates[start : start + chunk_size]
-        valid.extend(_probe_chunk(parquet_path, chunk, valid_time_sigs, min_bars))
+    # Each _probe_chunk spawns a subprocess that reloads the shard, so run them
+    # concurrently rather than one-at-a-time (the old sequential loop was the
+    # main cost -- a 170k-row shard filtered ~112 chunks serially = hours).
+    # ThreadPool is fine: the work is subprocess-bound (GIL released while each
+    # child runs). Cap workers so we don't hold too many full-shard loads in
+    # RAM at once (CHUNK_WORKERS env overrides; default min(8, cpus)).
+    import concurrent.futures as _cf
+    workers = int(os.environ.get("CHUNK_WORKERS", "0")) or min(8, os.cpu_count() or 4)
+    workers = max(1, min(workers, len(chunks)))
+    if workers == 1 or len(chunks) <= 1:
+        for chunk in chunks:
+            valid.extend(_probe_chunk(parquet_path, chunk, valid_time_sigs, min_bars))
+    else:
+        with _cf.ThreadPoolExecutor(max_workers=workers) as _ex:
+            for res in _ex.map(
+                lambda ch: _probe_chunk(parquet_path, ch, valid_time_sigs, min_bars), chunks
+            ):
+                valid.extend(res)
+    valid.sort()
 
     dropped = len(candidates) - len(valid)
     print(f"  dataset filter: dropped {dropped} rows (parse errors / bad TS) — {len(valid)} kept")

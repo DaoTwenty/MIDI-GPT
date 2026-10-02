@@ -23,9 +23,18 @@ def cached_indices(key: str) -> Path:
 
 
 def file_cache_key(path: str, **extra) -> str:
-    """Stable MD5 key derived from a file's path, size, mtime, and any extra kwargs."""
+    """Stable MD5 key derived from a file's path, size, and any extra kwargs.
+
+    Deliberately does NOT include mtime: this dataset is rsync/Globus-synced
+    across 5 clusters, and every sync rewrites mtime, which would silently
+    invalidate the whole filter cache and force a multi-hour recompute per
+    cluster on every transfer. path+size is stable across clusters (same
+    canonical path, size preserved by rsync) and still changes if a shard's
+    content is replaced. (If a shard were ever replaced with different content
+    of the exact same byte size, delete the cache dir to force a rebuild.)
+    """
     stat = Path(path).stat()
-    raw = f"{path}:{stat.st_size}:{stat.st_mtime_ns}"
+    raw = f"{path}:{stat.st_size}"
     for k, v in sorted(extra.items()):
         raw += f":{k}={v}"
     return hashlib.md5(raw.encode()).hexdigest()
