@@ -42,8 +42,8 @@ VD=/scratch/triana24/MIDI-GPT/venvs
 if [ -d "$VD/venv-audio-conditioning/bin" ]; then
   # shellcheck disable=SC1091
   source "$VD/venv-audio-conditioning/bin/activate"
-  python -c "import muscriptor, einops, music2latent" 2>/dev/null \
-    || pip install -q muscriptor einops music2latent
+  python -c "import muscriptor, einops, music2latent, sympy" 2>/dev/null \
+    || pip install -q muscriptor einops music2latent sympy
   deactivate 2>/dev/null || true
 fi
 TMP="${TMPDIR:-/scratch/triana24/.tmp}"; mkdir -p "$TMP"
