@@ -126,6 +126,14 @@ EXTRA_ARGS=()
 [ -n "$AUDIO_WEIGHTS" ] && EXTRA_ARGS+=(--audio-weights "$AUDIO_WEIGHTS")
 [ -n "$MODEL_SIZE" ] && EXTRA_ARGS+=(--model-size "$MODEL_SIZE")
 
+# VRAM-aware batch. PRISM exports PRISM_GPU_VRAM_GB for whichever GPU this item
+# landed on (80 on the h100 clusters, 40 on narval's a100). Halve the batch and
+# double grad-accum on the 40GB card so the EFFECTIVE batch (batch*accum=16)
+# stays identical across hardware -- keeps the screen a fair comparison.
+VRAM="${PRISM_GPU_VRAM_GB:-80}"
+if [ "$VRAM" -lt 80 ]; then BATCH=8; ACCUM=2; else BATCH=16; ACCUM=1; fi
+echo "GPU VRAM=${VRAM}GB -> --batch-size $BATCH --grad-accum $ACCUM (effective 16)"
+
 python scripts/train_audio_conditioned.py \
     --train-data "$TRAIN_DATA" \
     --slakh-root "$SLAKH_ROOT" \
@@ -135,9 +143,9 @@ python scripts/train_audio_conditioned.py \
     --soundfont-dir soundfonts/ \
     --audio-extractor "$AUDIO_EXTRACTOR" \
     "${EXTRA_ARGS[@]}" \
-    --batch-size 16 \
+    --batch-size "$BATCH" \
     --max-steps "$MAX_STEPS" \
-    --grad-accum 1 \
+    --grad-accum "$ACCUM" \
     --num-workers 8 \
     --precision bf16 \
     --training-mode adapter_only \

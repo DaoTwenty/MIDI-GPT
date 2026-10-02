@@ -21,6 +21,11 @@ args: "{matrix}"
 
 mode: distribute
 matrix:
+  # Spread the 8 items across clusters instead of letting one best-scored
+  # cluster absorb all of them (which strands the whole batch if that
+  # cluster's --test-only estimate goes stale). 2/cluster over the usable
+  # fleet (narval a100 + fir/rorqual/trillium/nibi h100) = all 8 placed.
+  max_per_cluster: 2
   values:
     - "yourmt3"
     - "muscriptor"
