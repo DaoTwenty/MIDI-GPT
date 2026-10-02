@@ -34,6 +34,18 @@ rustup default stable >/dev/null 2>&1 || true
 
 WT=/scratch/triana24/MIDI-GPT/worktree-audio-conditioning
 VD=/scratch/triana24/MIDI-GPT/venvs
+
+# venv-audio-conditioning hosts three extractors directly (yourmt3, muscriptor,
+# music2latent). The base `pip install -e .[train]` does NOT pull their runtime
+# packages, so add them here (idempotent). muscriptor + einops + music2latent
+# install cleanly on top of the Alliance transformers wheel (no conflict).
+if [ -d "$VD/venv-audio-conditioning/bin" ]; then
+  # shellcheck disable=SC1091
+  source "$VD/venv-audio-conditioning/bin/activate"
+  python -c "import muscriptor, einops, music2latent" 2>/dev/null \
+    || pip install -q muscriptor einops music2latent
+  deactivate 2>/dev/null || true
+fi
 TMP="${TMPDIR:-/scratch/triana24/.tmp}"; mkdir -p "$TMP"
 printf "pyarrow==%s\n" "$(python3 -c 'import pyarrow; print(pyarrow.__version__)')" > "$TMP/pyarrow_constraint.txt"
 
