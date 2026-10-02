@@ -41,3 +41,21 @@ resources:
   cpus: 12
   mem_per_cpu_gb: 6   # 12 x 6 = 72G total
   time: "03:00:00"
+
+# Dependency closure — checked on every target cluster before scheduling
+# (prism preflight / auto on submit). These are exactly the gaps that cost a
+# day of discover-by-failure: the MIDI-GPT backbone, extractor weights, the
+# Slakh render, and the base-venv extractor packages. Paths are $SCRATCH-relative.
+requires_files:
+  - "MIDI-GPT/runs/yellow_medium-20260621-115325/model_final.safetensors"  # backbone
+  - "MIDI-GPT/hf_cache/yourmt3"
+  - "MIDI-GPT/hf_cache/dac_44khz"
+  - "MIDI-GPT/data/slakh2100/slakh2100_flac_redux/train"
+  - "MIDI-GPT/data/v2.0.0/train"
+requires_imports:          # checked in venv-audio-conditioning (the job's venv) + module env
+  - lightning
+  - muscriptor
+  - music2latent
+  - einops
+requires_inodes: 120000    # the extracted Slakh + venvs are inode-heavy (1e6/user cap)
+requires_space_gb: 130
