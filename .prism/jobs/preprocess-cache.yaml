@@ -1,0 +1,29 @@
+name: preprocess-cache
+# CPU-only pre-build of the audio-screen valid-index filter cache. Run this
+# once per cluster BEFORE the GPU screen so every screen item starts with an
+# instant cache hit instead of a ~hours-long cold filter at dataset-init.
+#
+# No `gpus:` -> schedules on the CPU partition (fast queue), never competes
+# with audio-screen for the contended GPU nodes. The .npy it writes
+# (MIDIGPT_CACHE, path+size+params keyed, mtime-independent) is exactly what
+# the screen's dataset-init looks up. See scripts/preprocess_cache.sh for why
+# the filter params are held in lockstep with train_audio_screen.sh.
+#
+# Submit per cluster (cache is local to each cluster's /scratch):
+#   prism submit preprocess-cache -C nibi -C fir -C rorqual -C narval
+# (Keys are portable, so one run's .npy can alternatively be Globus-synced to
+#  the others instead of re-filtering on each — but a CPU job is cheap enough
+#  to just run everywhere.)
+script: bash /scratch/triana24/MIDI-GPT/worktree-audio-conditioning/scripts/preprocess_cache.sh
+
+resources:
+  cpus: 16
+  mem_per_cpu_gb: 4   # 16 x 4 = 64G; each parallel shard-probe reloads a ~211MB shard
+  time: "04:00:00"
+
+requires_files:
+  - "MIDI-GPT/data/v2.0.0/train"
+  - "MIDI-GPT/worktree-audio-conditioning/models/amber_encoder.json"
+requires_imports:
+  - symusic
+  - midigpt
