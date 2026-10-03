@@ -1,0 +1,37 @@
+name: audio-screen-rerun2
+# Second rerun: the three extractors whose -check venvs had no in-venv
+# transformers (they leaned on a stray ~/.local global copy that the datasets
+# install's newer huggingface_hub broke — is_offline_mode ImportError). Now
+# that transformers>=4.53 is installed in-venv on venv-mert-check (mert, dac)
+# and venv-muq-check (muq) across all clusters, re-run them.
+# (sheetsage2 + music2latent are already handled by audio-screen-rerun; same is
+#  held back — its transformers-5.x / hub-2.x / torch-2.7.1 stack genuinely
+#  conflicts with the shared training-loop deps and is being resolved
+#  separately.)
+script: bash /scratch/triana24/MIDI-GPT/worktree-audio-conditioning/scripts/train_audio_screen.sh
+args: "{matrix}"
+
+mode: distribute
+matrix:
+  max_per_cluster: 1
+  values:
+    - "mert"
+    - "muq"
+    - "dac"
+
+resources:
+  gpus: 1
+  cpus: 12
+  mem_per_cpu_gb: 6
+  time: "03:00:00"
+
+requires_files:
+  - "MIDI-GPT/runs/yellow_medium-20260621-115325/model_final.safetensors"
+  - "MIDI-GPT/data/v2.0.0/train"
+  - "MIDI-GPT/data/slakh2100/slakh2100_flac_redux/train"
+  - "MIDI-GPT/worktree-audio-conditioning/soundfonts/FluidR3_GM.sf2"
+  - "MIDI-GPT/hf_cache/mert-v2-fullsong"
+  - "MIDI-GPT/hf_cache/muq-large-msd-iter"
+  - "MIDI-GPT/hf_cache/dac_44khz"
+requires_inodes: 120000
+requires_space_gb: 130

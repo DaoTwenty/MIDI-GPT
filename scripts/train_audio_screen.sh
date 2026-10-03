@@ -88,7 +88,13 @@ case "$NAME" in
         MODEL_SIZE=""
         ;;
     same)
-        VENV_NAME=venv-same-check; AUDIO_EXTRACTOR=same
+        # ISOLATED venv (no --system-site-packages): same's stack pins
+        # torch==2.7.1 + transformers>=5.8 + huggingface_hub>=1.7.1, which
+        # conflicts irreconcilably with the cluster's module/~.local torch 2.11
+        # that the other -check venvs inherit. venv-same-check-iso installs
+        # same's exact pins standalone (midigpt _core rebuilt against torch
+        # 2.7.1). Built on fir only (heavy multi-GB torch) -> pin same to fir.
+        VENV_NAME=venv-same-check-iso; AUDIO_EXTRACTOR=same
         AUDIO_WEIGHTS="/scratch/triana24/MIDI-GPT/hf_cache/same-l"
         MODEL_SIZE="same-l"
         ;;
