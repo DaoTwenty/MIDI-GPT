@@ -271,6 +271,65 @@ def _load_midi_ckpt(ckpt_path: str, encoder_config: _core.EncoderConfig):
     return model, encoder_config
 
 
+class MetricsJSONLogger(L.Callback):
+    """Readable, self-contained metrics log — independent of wandb.
+
+    Motivation (hard-won): on air-gapped-compute clusters wandb runs go OFFLINE
+    and may never sync; the batch-mode progress bar doesn't render metric values
+    into stdout; and we hit runs whose trained val/loss was recorded NOWHERE
+    retrievable. This callback guarantees three durable, greppable copies of
+    every eval's metrics:
+      1. a `[METRICS]` line printed to stdout (lands in the Slurm .out log),
+      2. one JSON object per eval appended to `<output_dir>/metrics.jsonl`,
+      3. a rolling `<output_dir>/metrics_summary.json` (latest + best val/loss).
+    No network, no TTY, no wandb needed.
+    """
+
+    _KEYS = ("val/loss", "val/entropy", "val/token_acc", "train/loss_epoch", "train/loss_step")
+
+    def __init__(self, output_dir: Path):
+        super().__init__()
+        self.jsonl_path = Path(output_dir) / "metrics.jsonl"
+        self.summary_path = Path(output_dir) / "metrics_summary.json"
+        self._best_val = None
+
+    def _snapshot(self, trainer) -> dict:
+        m = trainer.callback_metrics
+        rec = {"step": int(trainer.global_step), "epoch": int(trainer.current_epoch)}
+        for k in self._KEYS:
+            if k in m:
+                try:
+                    rec[k] = float(m[k])
+                except (TypeError, ValueError):
+                    pass
+        return rec
+
+    def _emit(self, trainer, tag: str) -> None:
+        if not trainer.is_global_zero:
+            return
+        rec = self._snapshot(trainer)
+        rec["tag"] = tag
+        parts = " ".join(f"{k}={rec[k]:.4f}" for k in self._KEYS if k in rec)
+        print(f"[METRICS] {tag} step={rec['step']} {parts}", flush=True)
+        try:
+            with open(self.jsonl_path, "a") as f:
+                f.write(json.dumps(rec) + "\n")
+            vl = rec.get("val/loss")
+            if vl is not None and (self._best_val is None or vl < self._best_val):
+                self._best_val = vl
+            summary = {"latest": rec, "best_val_loss": self._best_val}
+            with open(self.summary_path, "w") as f:
+                json.dump(summary, f, indent=2)
+        except OSError as e:
+            print(f"[METRICS] WARN could not write metrics file: {e}", flush=True)
+
+    def on_validation_end(self, trainer, pl_module) -> None:
+        self._emit(trainer, "val")
+
+    def on_train_end(self, trainer, pl_module) -> None:
+        self._emit(trainer, "final")
+
+
 def main():
     logging.basicConfig(
         level=getattr(logging, os.environ.get("LOGLEVEL", "INFO").upper(), logging.INFO),
@@ -487,7 +546,14 @@ def main():
 
     precision_str = {"fp16": "16-mixed", "bf16": "bf16-mixed", "fp32": "32"}[args.precision]
 
-    trainer_logger = _build_wandb_logger(args, output_dir) if args.wandb else True
+    # Always attach a CSVLogger (readable metrics.csv, no network/TTY/wandb
+    # needed) in addition to wandb, so metrics survive on air-gapped clusters
+    # where wandb goes offline. MetricsJSONLogger (below) adds a stdout print +
+    # metrics.jsonl on top of that.
+    from lightning.pytorch.loggers import CSVLogger
+    trainer_logger = [CSVLogger(save_dir=str(output_dir), name="csv_logs")]
+    if args.wandb:
+        trainer_logger.insert(0, _build_wandb_logger(args, output_dir))
 
     trainer = L.Trainer(
         max_steps=total_steps,
@@ -507,6 +573,7 @@ def main():
                 save_last=True,
             ),
             LearningRateMonitor(logging_interval="step"),
+            MetricsJSONLogger(output_dir),
         ],
         logger=trainer_logger,
     )

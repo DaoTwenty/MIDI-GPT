@@ -238,6 +238,36 @@ class AudioConditionedLightningModule(L.LightningModule):
             prog_bar=True,
             sync_dist=True,
         )
+
+        # Tier-A metrics: cheap, teacher-forced, from the logits we already have
+        # — no sampling. Computed on the target tokens only (labels != -100, so
+        # audio-context / prompt positions are excluded, same mask as the loss).
+        #   token_acc : top-1 next-token accuracy — a coarse "is the conditioning
+        #               pushing predictions toward the right tokens" signal.
+        #   entropy   : mean predictive entropy H(softmax(logits)) in nats. Lower
+        #               under audio conditioning = the extractor is reducing the
+        #               backbone's uncertainty about the MIDI (the key per-extractor
+        #               "information injected" signal — compare vs the MIDI-only
+        #               half of the 50/50 mix). Reported every n steps with the loss.
+        with torch.no_grad():
+            flat_logits = shift_logits.view(-1, shift_logits.size(-1))
+            flat_labels = shift_labels.view(-1)
+            valid = flat_labels != -100
+            n_valid = int(valid.sum())
+            if n_valid > 0:
+                vlogits = flat_logits[valid]
+                token_acc = (vlogits.argmax(dim=-1) == flat_labels[valid]).float().mean()
+                logp = F.log_softmax(vlogits, dim=-1)
+                entropy = -(logp.exp() * logp).sum(dim=-1).mean()
+                for name, val in (("token_acc", token_acc), ("entropy", entropy)):
+                    self.log(
+                        f"{stage}/{name}",
+                        val,
+                        on_step=(stage == "train"),
+                        on_epoch=True,
+                        prog_bar=(name == "token_acc"),
+                        sync_dist=True,
+                    )
         return loss
 
     def training_step(self, batch: dict[str, Any] | None, batch_idx: int) -> torch.Tensor | None:
