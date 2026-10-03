@@ -162,11 +162,16 @@ EXTRA_ARGS=()
 # landed on (80 on the h100 clusters, 40 on narval's a100). Halve the batch and
 # double grad-accum on the 40GB card so the EFFECTIVE batch (batch*accum=16)
 # stays identical across hardware -- keeps the screen a fair comparison.
-VRAM="${PRISM_GPU_VRAM_GB:-80}"
-if [ "$VRAM" -lt 80 ]; then BATCH=8; ACCUM=2; else BATCH=16; ACCUM=1; fi
-echo "GPU VRAM=${VRAM}GB -> --batch-size $BATCH --grad-accum $ACCUM (effective 16)"
+# Detect ACTUAL VRAM from nvidia-smi — do not trust PRISM_GPU_VRAM_GB, which
+# came back as 80 on narval's A100-40GB and drove --batch-size 16 onto a 40GB
+# card (OOM/thrash -> a 5-step dry run hit the 40-min wall). Fall back to the
+# PRISM value, then 40, only if the query fails.
+VRAM_MB=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -dc '0-9')
+if [ -n "$VRAM_MB" ]; then VRAM=$((VRAM_MB / 1024)); else VRAM="${PRISM_GPU_VRAM_GB:-40}"; fi
+if [ "$VRAM" -lt 60 ]; then BATCH=8; ACCUM=2; else BATCH=16; ACCUM=1; fi
+echo "GPU VRAM=${VRAM}GB (detected) -> --batch-size $BATCH --grad-accum $ACCUM (effective 16)"
 
-python scripts/train_audio_conditioned.py \
+python -u scripts/train_audio_conditioned.py \
     --train-data "$TRAIN_DATA" \
     --slakh-root "$SLAKH_ROOT" \
     --midi-ckpt "$MIDI_CKPT" \
