@@ -26,8 +26,16 @@ set -euo pipefail
 # global.yaml modules:, so load the stack here exactly like
 # train_audio_screen.sh does — otherwise dataset.py's `import pyarrow` dies
 # with ModuleNotFoundError on nibi/rorqual/narval.
+#
+# ORDER MATTERS: activate the venv AFTER the module load, not before. prism
+# already activates the venv for us, but `module load python/3.11.5` prepends
+# the module python to PATH and shadows the venv's python — which drops the
+# -e-installed `midigpt` (ModuleNotFoundError: No module named 'midigpt').
+# Re-sourcing the venv here puts the venv python back in front, exactly as the
+# screen script does.
 module purge
 module load python/3.11.5 gcc/12.3 arrow/19.0.1 cmake/3.31.0
+source /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning/bin/activate
 
 PROJECT="/scratch/triana24/MIDI-GPT/worktree-audio-conditioning"
 ENC_CFG="$PROJECT/models/amber_encoder.json"
