@@ -186,4 +186,10 @@ python scripts/train_audio_conditioned.py \
     --output-dir "$OUTPUT_DIR" \
     --wandb --wandb-project midigpt --wandb-run-name "audio_screen_${NAME}"
 
-echo "Screen $NAME exited with status $?"
+RC=$?
+echo "Screen $NAME exited with status $RC"
+# Propagate the real exit code. Without this the script ended on the echo
+# (exit 0), so a FAILED training (python exit 1) was recorded by SLURM/prism as
+# COMPLETED exit 0 — which hid real failures (yourmt3/muscriptor looked "done"
+# but had trained/saved nothing). Now a failed run shows as FAILED.
+exit $RC
