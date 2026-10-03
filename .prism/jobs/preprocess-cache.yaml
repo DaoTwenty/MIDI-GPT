@@ -14,7 +14,23 @@ name: preprocess-cache
 # (Keys are portable, so one run's .npy can alternatively be Globus-synced to
 #  the others instead of re-filtering on each — but a CPU job is cheap enough
 #  to just run everywhere.)
+#
+# distribute mode (not smart/race): the cache must be built ON every cluster,
+# not raced to one winner — and distribute needs no cross-cluster coordination,
+# so it works with the local state backend. One matrix item per cluster +
+# max_per_cluster: 1 pins exactly one build onto each of the 4 targets
+# (pigeonhole: 4 items, 4 clusters). The matrix value is just a readable label;
+# preprocess_cache.sh takes no args.
 script: bash /scratch/triana24/MIDI-GPT/worktree-audio-conditioning/scripts/preprocess_cache.sh
+
+mode: distribute
+matrix:
+  max_per_cluster: 1
+  values:
+    - "nibi"
+    - "fir"
+    - "rorqual"
+    - "narval"
 
 resources:
   cpus: 16
