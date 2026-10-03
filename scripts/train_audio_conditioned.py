@@ -200,6 +200,13 @@ def parse_args():
     parser.add_argument("--limit-val-batches", type=int, default=50, help="Max validation batches per eval (0=full)")
     parser.add_argument("--warmup-steps", type=int, default=200)
     parser.add_argument("--max-seq-len", type=int, default=2048)
+    parser.add_argument(
+        "--infill-prob", type=float, default=0.0,
+        help="Fraction of examples that use bar-infill (vs pure autoregressive). "
+             "DEFAULT 0.0 = autoregressive only — the extractor screen must NOT "
+             "infill (the infill label path still leaks/mis-masks audio tracks; "
+             "fixing it is deferred until after the sweep). Do not set >0 until "
+             "that is fixed.")
     parser.add_argument("--max-samples", type=int, default=0, help="Limit dataset to N samples (0=all)")
     parser.add_argument("--resume-from", type=str, default=None,
                          help="Lightning .ckpt to resume from, or 'auto' to use "
@@ -454,6 +461,7 @@ def main():
         max_seq_len=args.max_seq_len,
         score_ids=score_ids,
         audio_cache=audio_cache,
+        infill_prob=args.infill_prob,
     )
 
     if args.slakh_root:
@@ -466,6 +474,7 @@ def main():
             tokenizer=tokenizer,
             num_bars_choices=num_bars_list,
             max_seq_len=args.max_seq_len,
+            infill_prob=args.infill_prob,
         )
         print(f"  Mixed dataset: 50% GigaMIDI ({len(giga_dataset)}) / 50% Slakh2100 ({len(slakh_dataset)})")
         train_dataset = MixedMidiGPTDataset(giga_dataset, slakh_dataset)
@@ -499,6 +508,7 @@ def main():
             max_seq_len=args.max_seq_len,
             score_ids=eval_score_ids,
             audio_cache=audio_cache,
+            infill_prob=args.infill_prob,
         )
         eval_loader = DataLoader(
             eval_dataset,

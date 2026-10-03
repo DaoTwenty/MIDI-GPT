@@ -28,17 +28,30 @@ def _assign_audio_tracks(
     num_tracks: int,
     is_infill: bool,
     audio_track_prob: float,
+    single_target_prob: float = 0.1,
 ) -> list[bool]:
-    """Decide which tracks are audio context (True) vs MIDI (False).
+    """Decide which tracks are audio context (True) vs MIDI target (False).
 
-    Ensures at least one audio track and, when infilling, at least one MIDI
-    track (the generation target).
+    ALWAYS guarantees >=1 audio context AND >=1 MIDI target — the model must
+    have something to generate in every example, in every mode (not just
+    infill; the old code only forced a target when infilling, so autoregressive
+    draws could end up all-audio with nothing to predict).
+
+    With probability ``single_target_prob``, force the hardest accompaniment
+    case: exactly ONE MIDI target and every other track audio context.
+
+    ``is_infill`` is accepted for call-site compatibility but no longer gates
+    the target guarantee.
     """
+    if num_tracks >= 2 and random.random() < single_target_prob:
+        track_is_audio = [True] * num_tracks
+        track_is_audio[random.randrange(num_tracks)] = False  # exactly 1 MIDI target
+        return track_is_audio
     track_is_audio = [random.random() < audio_track_prob for _ in range(num_tracks)]
     if not any(track_is_audio):
-        track_is_audio[random.randrange(num_tracks)] = True
-    if is_infill and all(track_is_audio):
-        track_is_audio[random.randrange(num_tracks)] = False
+        track_is_audio[random.randrange(num_tracks)] = True   # >=1 audio context
+    if all(track_is_audio):
+        track_is_audio[random.randrange(num_tracks)] = False  # >=1 MIDI target (always)
     return track_is_audio
 
 

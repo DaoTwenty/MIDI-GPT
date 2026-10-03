@@ -410,40 +410,54 @@ class MidiGPTDatasetBase:
             return list(token_ids)
 
         labels = [-100] * len(token_ids)
-        track_token_ids = {
-            self._tokenizer._vocab.encode_val(_core.TokenType.Track, v)
-            for v in range(self._tokenizer._vocab.domain_size(_core.TokenType.Track))
+        vocab = self._tokenizer._vocab
+        # The Track token's VALUE is the track TYPE (0=melodic, 1=drums,
+        # 2=audio). Mask ONLY audio-track spans — MIDI (melodic/drum) TARGET
+        # tracks must receive loss. The previous code keyed on the set of ALL
+        # Track values, so the `in_audio_track` flag tripped at the start of
+        # every track and masked the targets too → the autoregressive path
+        # trained on no musical target at all. Key on value 2 only.
+        AUDIO_TRACK_VALUE = 2
+        has_audio_type = vocab.domain_size(_core.TokenType.Track) > AUDIO_TRACK_VALUE
+        audio_track_token = (
+            vocab.encode_val(_core.TokenType.Track, AUDIO_TRACK_VALUE) if has_audio_type else None
+        )
+        nonaudio_track_tokens = {
+            vocab.encode_val(_core.TokenType.Track, v)
+            for v in range(vocab.domain_size(_core.TokenType.Track))
+            if v != AUDIO_TRACK_VALUE
         }
         track_end_token = (
-            self._tokenizer._vocab.encode_val(_core.TokenType.TrackEnd, 0)
-            if self._tokenizer._vocab.has(_core.TokenType.TrackEnd) else None
+            vocab.encode_val(_core.TokenType.TrackEnd, 0)
+            if vocab.has(_core.TokenType.TrackEnd) else None
         )
 
         if is_infill:
-            vocab = self._tokenizer._vocab
+            # NOTE: infill is disabled for the extractor sweep (infill_prob=0),
+            # so this branch is unreachable during the sweep. It still has the
+            # known audio-leak bug (audio tracks' fill-bar notes get labeled +
+            # emitted); fixing infill is deferred until after the sweep. Do NOT
+            # re-enable infill without fixing multi_fill to exclude audio tracks
+            # and masking audio fill blocks here.
             if vocab.has(_core.TokenType.FillInStart):
                 fill_start_token = vocab.encode_val(_core.TokenType.FillInStart, 0)
                 try:
                     fill_start_idx = token_ids.index(fill_start_token)
-                    in_audio_track = False
                     for i in range(fill_start_idx + 1, len(token_ids)):
-                        if token_ids[i] in track_token_ids:
-                            in_audio_track = True
-                        elif token_ids[i] == track_end_token:
-                            in_audio_track = False
-                        if not in_audio_track:
-                            labels[i] = token_ids[i]
+                        labels[i] = token_ids[i]
                 except ValueError:
                     pass
         else:
+            # Autoregressive: loss on everything EXCEPT inside an audio track.
             in_audio_track = False
             for i in range(len(token_ids)):
-                if token_ids[i] in track_token_ids:
+                tok = token_ids[i]
+                if tok == audio_track_token:
                     in_audio_track = True
-                elif token_ids[i] == track_end_token:
+                elif tok in nonaudio_track_tokens or tok == track_end_token:
                     in_audio_track = False
                 if not in_audio_track:
-                    labels[i] = token_ids[i]
+                    labels[i] = tok
 
         return labels
 
