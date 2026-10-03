@@ -61,7 +61,7 @@ build() {  # $1 = venv name, $2 = pip extra
     #     explicitly (NOT via .[train], which would repin transformers and
     #     break the extractor the -check venv exists to isolate).
     "$VD/$v/bin/python" -c "import fluidsynth" 2>/dev/null || "$VD/$v/bin/pip" install -q pyfluidsynth
-    "$VD/$v/bin/python" -c "import lightning, wandb, einops" 2>/dev/null || "$VD/$v/bin/pip" install -q lightning wandb einops
+    "$VD/$v/bin/python" -c "import lightning, wandb, einops, datasets, dotenv" 2>/dev/null || "$VD/$v/bin/pip" install -q lightning wandb einops datasets python-dotenv
     echo "[$v] present (runtime deps ensured)"; return 0
   fi
   echo "[$v] building (.[$x]) ..."
@@ -72,7 +72,10 @@ build() {  # $1 = venv name, $2 = pip extra
   pip install -q --only-binary=:all: symusic
   ( cd "$WT" && pip install --no-build-isolation -e ".[$x]" -c "$TMP/pyarrow_constraint.txt" )
   pip install -q pyfluidsynth          # MIDI->audio synth (synth.py) — every extractor venv
-  pip install -q lightning wandb einops # training-loop deps (not pulled by .[$x]); see note above
+  # training-loop deps (not pulled by .[$x]): lightning/wandb from [train],
+  # datasets+python-dotenv also from [train] (dataset.py:493 imports datasets),
+  # einops for yourmt3/sheetsage2. transformers left to the extractor pin.
+  pip install -q lightning wandb einops datasets python-dotenv
   deactivate 2>/dev/null || true
   echo "[$v] done"
 }

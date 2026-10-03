@@ -62,9 +62,13 @@ case "$NAME" in
         # trust_remote_code loading only copies modeling_sheetsage2.py's
         # direct imports, not transitive ones (tokenization_sheetsage2.py's
         # own imports) -- confirmed broken locally, confirmed working via
-        # the bare repo ID (transformers fetches the full file listing).
-        # Trades a network fetch of the MERT2 backbone at job start (the
-        # factory doesn't expose base_model_path) for correctness.
+        # the repo ID (transformers resolves the full file listing). Rather
+        # than fetch that from the network at job start (impossible on
+        # air-gapped compute -- the original LocalEntryNotFoundError crash),
+        # the full m-a-p/SheetSage2 hub snapshot (+ its xlm-roberta tokenizer)
+        # is pre-staged in HF_HOME's hub cache on every cluster and loaded
+        # offline via HF_HUB_OFFLINE=1 (set above) -- hub-cache mode resolves
+        # the transitive imports a loose local dir can't.
         AUDIO_WEIGHTS="m-a-p/SheetSage2"
         MODEL_SIZE=""
         ;;
@@ -110,6 +114,18 @@ MAX_STEPS="${MAX_STEPS:-1500}"
 export LD_LIBRARY_PATH="/scratch/triana24/fluidsynth-install/lib64:${LD_LIBRARY_PATH:-}"
 export PATH="/scratch/triana24/fluidsynth-install/bin:${PATH:-}"
 export MIDIGPT_CACHE="/scratch/triana24/MIDI-GPT/.midigpt_cache"
+
+# Compute nodes are air-gapped on several clusters (no internet). Every
+# extractor's weights are pre-staged — either as a local dir passed via
+# AUDIO_WEIGHTS (mert/dac/muq/same/yourmt3/muscriptor) or in the HF hub cache
+# (sheetsage2, music2latent). Force offline so a cached load resolves from
+# disk instead of attempting a doomed network etag-check — the exact crash
+# that killed sheetsage2 (LocalEntryNotFoundError). Harmless for local-path
+# loaders. Requires the sheetsage2 + music2latent hub snapshots present in
+# HF_HOME's hub cache on every cluster (synced there from nibi).
+export HF_HUB_OFFLINE=1
+export TRANSFORMERS_OFFLINE=1
+export HF_DATASETS_OFFLINE=1
 
 source "$VENV/bin/activate"
 cd "$PROJECT"
