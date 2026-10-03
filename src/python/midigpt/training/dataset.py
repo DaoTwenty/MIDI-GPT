@@ -411,34 +411,34 @@ class MidiGPTDatasetBase:
 
         labels = [-100] * len(token_ids)
         vocab = self._tokenizer._vocab
-        # The Track token's VALUE is the track TYPE (0=melodic, 1=drums,
-        # 2=audio). Mask ONLY audio-track spans — MIDI (melodic/drum) TARGET
-        # tracks must receive loss. The previous code keyed on the set of ALL
-        # Track values, so the `in_audio_track` flag tripped at the start of
-        # every track and masked the targets too → the autoregressive path
-        # trained on no musical target at all. Key on value 2 only.
-        AUDIO_TRACK_VALUE = 2
-        has_audio_type = vocab.domain_size(_core.TokenType.Track) > AUDIO_TRACK_VALUE
-        audio_track_token = (
-            vocab.encode_val(_core.TokenType.Track, AUDIO_TRACK_VALUE) if has_audio_type else None
-        )
-        nonaudio_track_tokens = {
+        # A track is AUDIO (context) iff its token span contains an
+        # [AudioContext] placeholder. The encoder marks audio tracks by EMITTING
+        # AudioContext tokens, NOT by a distinct Track value — in this config the
+        # Track domain is only {melodic, drum}, there is no "audio" Track value.
+        # (Verified against a real amber training example.) So identify audio
+        # spans by AudioContext presence and mask them entirely to -100 (pure
+        # context, never a generation target); everything else — the MIDI target
+        # tracks and the piece header — is a generation target and gets loss.
+        track_start_ids = {
             vocab.encode_val(_core.TokenType.Track, v)
             for v in range(vocab.domain_size(_core.TokenType.Track))
-            if v != AUDIO_TRACK_VALUE
         }
         track_end_token = (
             vocab.encode_val(_core.TokenType.TrackEnd, 0)
             if vocab.has(_core.TokenType.TrackEnd) else None
         )
+        audio_ctx_id = (
+            vocab.encode_val(_core.TokenType.AudioContext, 0)
+            if vocab.has(_core.TokenType.AudioContext) else None
+        )
 
         if is_infill:
-            # NOTE: infill is disabled for the extractor sweep (infill_prob=0),
+            # NOTE: infill is DISABLED for the extractor sweep (infill_prob=0),
             # so this branch is unreachable during the sweep. It still has the
             # known audio-leak bug (audio tracks' fill-bar notes get labeled +
             # emitted); fixing infill is deferred until after the sweep. Do NOT
-            # re-enable infill without fixing multi_fill to exclude audio tracks
-            # and masking audio fill blocks here.
+            # re-enable infill without excluding audio tracks from multi_fill and
+            # masking audio fill blocks here.
             if vocab.has(_core.TokenType.FillInStart):
                 fill_start_token = vocab.encode_val(_core.TokenType.FillInStart, 0)
                 try:
@@ -447,18 +447,31 @@ class MidiGPTDatasetBase:
                         labels[i] = token_ids[i]
                 except ValueError:
                     pass
-        else:
-            # Autoregressive: loss on everything EXCEPT inside an audio track.
-            in_audio_track = False
-            for i in range(len(token_ids)):
-                tok = token_ids[i]
-                if tok == audio_track_token:
-                    in_audio_track = True
-                elif tok in nonaudio_track_tokens or tok == track_end_token:
-                    in_audio_track = False
-                if not in_audio_track:
-                    labels[i] = tok
+            return labels
 
+        # Autoregressive: delimit track spans [Track ... TrackEnd], then mask any
+        # span that contains an AudioContext token.
+        spans: list[tuple[int, int]] = []
+        start = None
+        for i, tok in enumerate(token_ids):
+            if tok in track_start_ids:
+                start = i
+            elif tok == track_end_token and start is not None:
+                spans.append((start, i))
+                start = None
+        if start is not None:  # final track span without a trailing TrackEnd
+            spans.append((start, len(token_ids) - 1))
+
+        audio_span = [False] * len(token_ids)
+        if audio_ctx_id is not None:
+            for s, e in spans:
+                if any(token_ids[k] == audio_ctx_id for k in range(s, e + 1)):
+                    for k in range(s, e + 1):
+                        audio_span[k] = True
+
+        for i, tok in enumerate(token_ids):
+            if not audio_span[i]:
+                labels[i] = tok
         return labels
 
     def _genre_token(self, idx: int) -> int:
