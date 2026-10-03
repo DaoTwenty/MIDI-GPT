@@ -1,0 +1,39 @@
+name: audio-screen-rerun
+# One-off rerun of the three audio-screen extractors that needed a fix the
+# first batch (7e6edf) surfaced, after the fixes landed:
+#   mert          — venv-mert-check was missing datasets/python-dotenv
+#   sheetsage2    — hub snapshot not staged + no offline mode (air-gapped)
+#   music2latent  — hub-cached, but needed HF_HUB_OFFLINE to skip a doomed
+#                   network etag-check on air-gapped compute
+# yourmt3 (done, full 1500 steps) + muscriptor (trained) are untouched; the
+# other three (dac/muq/same) were still queued and run fine with the now-fixed
+# venvs, so they're not re-run here. Identical script/resources/closure to
+# audio-screen.yaml — only the matrix is narrowed to these three.
+script: bash /scratch/triana24/MIDI-GPT/worktree-audio-conditioning/scripts/train_audio_screen.sh
+args: "{matrix}"
+
+mode: distribute
+matrix:
+  max_per_cluster: 1
+  values:
+    - "mert"
+    - "sheetsage2"
+    - "music2latent"
+
+resources:
+  gpus: 1
+  cpus: 12
+  mem_per_cpu_gb: 6
+  time: "03:00:00"
+
+requires_files:
+  - "MIDI-GPT/runs/yellow_medium-20260621-115325/model_final.safetensors"
+  - "MIDI-GPT/data/v2.0.0/train"
+  - "MIDI-GPT/data/slakh2100/slakh2100_flac_redux/train"
+  - "MIDI-GPT/worktree-audio-conditioning/soundfonts/FluidR3_GM.sf2"
+requires_hf_models:
+  - "m-a-p/SheetSage2"
+  - "FacebookAI/xlm-roberta-base"
+  - "SonyCSLParis/music2latent"
+requires_inodes: 120000
+requires_space_gb: 130

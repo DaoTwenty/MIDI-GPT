@@ -123,6 +123,11 @@ export MIDIGPT_CACHE="/scratch/triana24/MIDI-GPT/.midigpt_cache"
 # that killed sheetsage2 (LocalEntryNotFoundError). Harmless for local-path
 # loaders. Requires the sheetsage2 + music2latent hub snapshots present in
 # HF_HOME's hub cache on every cluster (synced there from nibi).
+# Point HF at the pre-staged cache explicitly (not every cluster's config env
+# sets HF_HOME, and the default ~/.cache/huggingface is empty) — the hub
+# snapshots (sheetsage2, music2latent, xlm-roberta) live here, and offline
+# loading below resolves them from exactly this dir.
+export HF_HOME="/scratch/triana24/MIDI-GPT/.hf_cache"
 export HF_HUB_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
 export HF_DATASETS_OFFLINE=1
