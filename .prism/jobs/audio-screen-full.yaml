@@ -1,0 +1,37 @@
+name: audio-screen-full
+# Full 1500-step extractor screen on the CORRECTED training (loss masking fixed:
+# audio tracks are -100 context, all MIDI tracks get loss; infill disabled =
+# autoregressive-only). Produces the first VALID val/loss ranking — every prior
+# screen number was from the broken masking.
+# These 7 run anywhere (venvs fixed + weights staged on all clusters). `same`
+# runs separately (audio-screen-same.yaml) because its isolated torch-2.7.1 venv
+# exists only on fir.
+script: bash /scratch/triana24/MIDI-GPT/worktree-audio-conditioning/scripts/train_audio_screen.sh
+args: "{matrix}"
+mode: distribute
+matrix:
+  max_per_cluster: 2
+  values:
+    - "yourmt3"
+    - "muscriptor"
+    - "mert"
+    - "muq"
+    - "dac"
+    - "music2latent"
+    - "sheetsage2"
+resources:
+  gpus: 1
+  cpus: 12
+  mem_per_cpu_gb: 6
+  time: "03:00:00"
+requires_files:
+  - "MIDI-GPT/runs/yellow_medium-20260621-115325/model_final.safetensors"
+  - "MIDI-GPT/data/v2.0.0/train"
+  - "MIDI-GPT/data/slakh2100/slakh2100_flac_redux/train"
+  - "MIDI-GPT/worktree-audio-conditioning/soundfonts/FluidR3_GM.sf2"
+requires_hf_models:
+  - "m-a-p/SheetSage2"
+  - "FacebookAI/xlm-roberta-base"
+  - "SonyCSLParis/music2latent"
+requires_inodes: 120000
+requires_space_gb: 130
