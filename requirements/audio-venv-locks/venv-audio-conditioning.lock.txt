@@ -1,4 +1,7 @@
-# pip freeze of venv-audio-conditioning on narval (a100), 2026-10-02 — reference lock
+# pip freeze of venv-audio-conditioning on narval (a100), 2026-10-03 — reference lock
+# Regenerated after adding training-loop deps (lightning/wandb/einops)
+# the -check venvs were missing. See scripts/setup_audio_check_venvs.sh.
+-e git+ssh://git@github.com/DaoTwenty/MIDI-GPT-private.git@02237a153372f2e299e6eebe13855bd55cc25732#egg=midigpt&subdirectory=../../../MIDI-GPT/worktree-audio-conditioning
 absl_py==2.3.1+computecanada
 accelerate==1.11.0+computecanada
 aiohappyeyeballs==2.6.1+computecanada
@@ -7,28 +10,20 @@ aiosignal==1.4.0+computecanada
 annotated_doc==0.0.5+computecanada
 annotated_types==0.8.0+computecanada
 anyio==4.11.0+computecanada
-asttokens==3.0.1+computecanada
 attrs==25.4.0+computecanada
 beat-this==1.1.0
 certifi==2025.10.5+computecanada
 cffi==2.1.0+computecanada
 charset_normalizer==3.4.4+computecanada
 click==8.5.0+computecanada
-comm==0.2.3+computecanada
-contourpy==1.3.3+computecanada
-cycler==0.12.1+computecanada
 datasets==4.0.0+computecanada
-debugpy==1.8.19+computecanada
-decorator==5.2.1+computecanada
 dill==0.3.8+computecanada
 distlib @ file:///tmp/ebuser/avx2/Python/3.11.5/GCCcore-12.3.0/distlib/distlib-0.3.7
 editables @ file:///tmp/ebuser/avx2/Python/3.11.5/GCCcore-12.3.0/editables/editables-0.5
 einops==0.8.2+computecanada
-executing==2.2.1+computecanada
 fastapi==0.142.2
 filelock @ file:///tmp/ebuser/avx2/Python/3.11.5/GCCcore-12.3.0/filelock/filelock-3.12.2
 flit_core @ file:///tmp/ebuser/avx2/Python/3.11.5/GCCcore-12.3.0/flit_core/flit_core-3.9.0
-fonttools==4.61.1+computecanada
 frozenlist==1.8.0+computecanada
 fsspec==2025.3.0+computecanada
 gitdb==4.0.12+computecanada
@@ -44,73 +39,46 @@ httpx==0.28.1+computecanada
 huggingface_hub==0.34.0+computecanada
 idna==3.11+computecanada
 inquirerpy==0.3.4+computecanada
-ipykernel==7.1.0+computecanada
-ipython==9.9.0+computecanada
-ipython_pygments_lexers==1.1.1+computecanada
-ipywidgets==8.1.8+computecanada
-jedi==0.19.2+computecanada
 jinja2==3.1.6+computecanada
-jupyter_client==8.8.0+computecanada
-jupyter_core==5.9.1+computecanada
-jupyterlab_widgets==3.0.16+computecanada
-kiwisolver==1.4.9+computecanada
 lightning==2.6.6
 lightning_utilities==0.15.3+computecanada
 Markdown==3.10
 markdown_it_py==4.2.0+computecanada
 MarkupSafe==3.0.2+computecanada
-matplotlib==3.10.8+computecanada
-matplotlib_inline==0.2.1+computecanada
 mdurl==0.1.2+computecanada
 miditok==3.0.6.post1
 mido==1.3.3
-mpmath==1.3.0+computecanada
 multidict==6.7.0+computecanada
 multiprocess==0.70.16+computecanada
 muscriptor==0.3.0
 music2latent==0.1.8
-nest_asyncio==1.6.0+computecanada
 networkx==3.5+computecanada
-nose==1.3.7+computecanada
 numpy==2.4.2+computecanada
 nvidia-ml-py==13.580.82
 nvitop==1.5.3
 opentelemetry-api==1.45.0
 packaging @ file:///tmp/ebuser/avx2/Python/3.11.5/GCCcore-12.3.0/packaging/packaging-23.1
-pandas==3.0.0+computecanada
-parso==0.8.5+computecanada
 pathspec @ file:///tmp/ebuser/avx2/Python/3.11.5/GCCcore-12.3.0/pathspec/pathspec-0.11.2
-pexpect==4.9.0+computecanada
 pfzy==0.3.4+computecanada
-pillow==12.1.0+computecanada
 platformdirs @ file:///tmp/ebuser/avx2/Python/3.11.5/GCCcore-12.3.0/platformdirs/platformdirs-3.10.0
 pluggy @ file:///tmp/ebuser/avx2/Python/3.11.5/GCCcore-12.3.0/pluggy/pluggy-1.3.0
-prompt_toolkit==3.0.52+computecanada
 propcache==0.4.1+computecanada
 protobuf==6.33.0+computecanada
-psutil==7.2.2+computecanada
-ptyprocess==0.7.0+computecanada
-pure_eval==0.2.3+computecanada
-pyarrow @ file:///tmp/ebuser/avx2/Arrow/19.0.1/GCCcore-12.3-gentoo/arrow/python
 pycparser==3.0+computecanada
 pydantic==2.13.5+computecanada
 pydantic_core==2.46.5+computecanada
-pygments==2.19.2+computecanada
+pyfluidsynth==1.4.0
 pyparsing @ file:///tmp/ebuser/avx2/Python/3.11.5/GCCcore-12.3.0/pyparsing/pyparsing-3.1.1
 pySmartDL==1.3.4+computecanada
 python-dotenv==1.2.4
-python_dateutil==2.9.0.post0+computecanada
 python_multipart==0.0.32+computecanada
 pytorch-lightning==2.6.6
-pytz==2025.2+computecanada
 PyYAML==6.0.2+computecanada
-pyzmq==27.1.0+computecanada
 regex==2024.11.6+computecanada
 requests==2.32.5+computecanada
 rich==15.0.0+computecanada
 rotary-embedding-torch==0.9.1
 safetensors==0.5.3+computecanada
-scipy==1.17.0+computecanada
 sentry-sdk==2.71.0
 setuptools-scm @ file:///tmp/ebuser/avx2/Python/3.11.5/GCCcore-12.3.0/setuptools_scm/setuptools_scm-7.1.0
 shellingham==1.5.4+computecanada
@@ -119,9 +87,7 @@ smmap==5.0.3+computecanada
 sniffio==1.3.1+computecanada
 soundfile==0.14.0
 soxr==0.5.0.post1+computecanada
-stack_data==0.6.3+computecanada
 starlette==1.7.0+computecanada
-sympy==1.14.0+computecanada
 symusic==0.5.0+computecanada
 tensorboard==2.20.0+computecanada
 tensorboard_data_server==0.7.2+computecanada
@@ -130,25 +96,20 @@ tomli @ file:///tmp/ebuser/avx2/Python/3.11.5/GCCcore-12.3.0/tomli/tomli-2.0.1
 torch==2.14.1+computecanada
 torchaudio==2.11.0+torch212.computecanada
 torchmetrics==1.9.0+computecanada
-tornado==6.5.4+computecanada
 tqdm==4.67.1+computecanada
-traitlets==5.14.3+computecanada
 transformers==4.57.1+computecanada
 triton==3.5.0+computecanada
 trove-classifiers @ file:///cvmfs/soft.computecanada.ca/easybuild/sources/p/Python/extensions/trove_classifiers-2023.8.7-py3-none-any.whl#sha256=a676626a31286130d56de2ea1232484df97c567eb429d56cfcb0637e681ecf09
 typer==0.27.2+computecanada
 typing_extensions==4.15.0+computecanada
 typing_inspection==0.4.4+computecanada
-tzdata==2025.3+computecanada
 urllib3==2.5.0+computecanada
 uvicorn==0.54.0
 uvloop==0.22.1+computecanada
 virtualenv @ file:///tmp/ebuser/avx2/Python/3.11.5/GCCcore-12.3.0/virtualenv/virtualenv-20.24.3
 wandb==0.27.2+computecanada
 watchfiles==1.1.1+computecanada
-wcwidth==0.5.2+computecanada
 websockets==17.1
 werkzeug==3.1.3+computecanada
-widgetsnbextension==4.0.15+computecanada
 xxhash==3.5.0+computecanada
 yarl==1.22.0+computecanada

@@ -52,12 +52,17 @@ printf "pyarrow==%s\n" "$(python3 -c 'import pyarrow; print(pyarrow.__version__)
 build() {  # $1 = venv name, $2 = pip extra
   local v="$1" x="$2"
   if [ -d "$VD/$v/bin" ] && "$VD/$v/bin/python" -c "import midigpt" 2>/dev/null; then
-    # midigpt present, but still ensure pyfluidsynth: synth.py renders MIDI->audio
-    # (soundfont) in EVERY extractor venv, so all of them need it, not just
-    # venv-audio-conditioning. (libfluidsynth comes from fluidsynth-install via
-    # the cluster's env_prepend LD_LIBRARY_PATH.)
-    "$VD/$v/bin/pip" show pyfluidsynth >/dev/null 2>&1 || "$VD/$v/bin/pip" install -q pyfluidsynth
-    echo "[$v] present (pyfluidsynth ensured)"; return 0
+    # midigpt present, but still ensure the runtime deps that the extractor
+    # extra (.[$x]) does NOT pull but training needs in EVERY extractor venv:
+    #   pyfluidsynth : synth.py renders MIDI->audio (soundfont) in every venv.
+    #   lightning/wandb/einops : train_audio_conditioned.py runs the full
+    #     Lightning loop IN the selected venv, so the -check venvs need the
+    #     training-loop deps too, not just their extractor. Installed
+    #     explicitly (NOT via .[train], which would repin transformers and
+    #     break the extractor the -check venv exists to isolate).
+    "$VD/$v/bin/python" -c "import fluidsynth" 2>/dev/null || "$VD/$v/bin/pip" install -q pyfluidsynth
+    "$VD/$v/bin/python" -c "import lightning, wandb, einops" 2>/dev/null || "$VD/$v/bin/pip" install -q lightning wandb einops
+    echo "[$v] present (runtime deps ensured)"; return 0
   fi
   echo "[$v] building (.[$x]) ..."
   python3 -m venv --system-site-packages "$VD/$v"
@@ -66,7 +71,8 @@ build() {  # $1 = venv name, $2 = pip extra
   pip install -q --upgrade pip "scikit-build-core>=0.9" pybind11
   pip install -q --only-binary=:all: symusic
   ( cd "$WT" && pip install --no-build-isolation -e ".[$x]" -c "$TMP/pyarrow_constraint.txt" )
-  pip install -q pyfluidsynth   # MIDI->audio synth (synth.py) — needed in every extractor venv
+  pip install -q pyfluidsynth          # MIDI->audio synth (synth.py) — every extractor venv
+  pip install -q lightning wandb einops # training-loop deps (not pulled by .[$x]); see note above
   deactivate 2>/dev/null || true
   echo "[$v] done"
 }
