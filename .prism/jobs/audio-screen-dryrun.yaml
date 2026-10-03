@@ -1,0 +1,32 @@
+name: audio-screen-dryrun
+# Short validation (dry run) of the extractors that were still broken, BEFORE
+# committing full 1500-step GPU runs. Submit with `--env MAX_STEPS=5`: loads
+# the backbone + extractor + dataset, runs a handful of real train steps, saves,
+# exits — enough to prove the whole pipeline works (datasets 4.0 local load,
+# in-venv transformers, HF offline model load) without burning a full 3h slot.
+# same is dry-run separately via audio-screen-same (needs its fir-only iso venv).
+script: bash /scratch/triana24/MIDI-GPT/worktree-audio-conditioning/scripts/train_audio_screen.sh
+args: "{matrix}"
+
+mode: distribute
+matrix:
+  max_per_cluster: 1
+  values:
+    - "mert"
+    - "muq"
+    - "dac"
+    - "sheetsage2"
+
+resources:
+  gpus: 1
+  cpus: 12
+  mem_per_cpu_gb: 6
+  time: "00:40:00"   # dry run only needs minutes; short wall-clock schedules faster
+
+requires_files:
+  - "MIDI-GPT/runs/yellow_medium-20260621-115325/model_final.safetensors"
+  - "MIDI-GPT/data/v2.0.0/train"
+  - "MIDI-GPT/data/slakh2100/slakh2100_flac_redux/train"
+  - "MIDI-GPT/worktree-audio-conditioning/soundfonts/FluidR3_GM.sf2"
+requires_inodes: 120000
+requires_space_gb: 130
