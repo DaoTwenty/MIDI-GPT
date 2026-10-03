@@ -198,23 +198,18 @@ def _abs_onset_seconds(score, track, bar_idx, note):
     return onset_ticks_abs * (us_per_quarter / 1e6) / ticks_per_quarter
 
 
-def target_track_notes(score):
-    """Collect (onset_sec, pitch) for every note in the non-'audio' (target) tracks.
-
-    Returns dict: track_idx -> list[(onset_sec, offset_sec, pitch)].
-    """
-    out = {}
-    for t_idx, track in enumerate(score.tracks):
-        if getattr(track, "track_type", None) == "audio":
-            continue
-        notes = []
-        for b_idx, bar in enumerate(track.bars):
-            for n in bar.notes:
-                on = _abs_onset_seconds(score, track, b_idx, n)
-                dur = n.duration_ticks * (score.tempo / 1e6) / score.resolution
-                notes.append((on, on + max(dur, 1e-3), n.pitch))
-        out[t_idx] = notes
-    return out
+def track_notes(score, t_idx):
+    """Collect (onset_sec, offset_sec, pitch) for one track's notes."""
+    if t_idx is None or t_idx >= len(score.tracks):
+        return []
+    track = score.tracks[t_idx]
+    notes = []
+    for b_idx, bar in enumerate(track.bars):
+        for n in bar.notes:
+            on = _abs_onset_seconds(score, track, b_idx, n)
+            dur = n.duration_ticks * (score.tempo / 1e6) / score.resolution
+            notes.append((on, on + max(dur, 1e-3), n.pitch))
+    return notes
 
 
 # ---------------------------------------------------------------------------
@@ -327,39 +322,49 @@ def frechet_distance(gen_feats, gt_feats):
 # Generation of the target tracks for one piece under one condition
 # ---------------------------------------------------------------------------
 
-def generate_accompaniment(engine, tokenizer, item, audio_conditioning, args):
-    """Generate the TARGET (non-audio) tracks conditioned on the context (audio)
-    tracks, via the standard engine — only the conditioning differs.
+def generate_accompaniment(engine, tokenizer, item, audio_conditioning, args, target):
+    """Generate ONE target MIDI track conditioned on everything else, via the
+    standard engine — only the conditioning (placeholder replacement) differs.
 
-    Request idiom (inference.md "Multi-track AR with leading context"):
-      * audio (context) tracks -> TrackPrompt(ignore=True): left untouched; their
-        [AudioContext] placeholders carry the injected audio soft embeddings.
-      * target (MIDI) tracks    -> TrackPrompt(bars=[], autoregressive=True):
-        generated fully from scratch — we also CLEAR their notes in the Score
-        passed to the engine so generation can't copy the ground truth.
-    audio_conditioning is the position-free (bar_frames, track_frames) list; the
-    engine binds it to its own placeholder positions.
+    The split is NOT "audio=context, all MIDI=target". One pass generates exactly
+    ONE track; every other track is CONTEXT — the audio tracks (their
+    [AudioContext] placeholders carry the injected audio soft embeddings) AND the
+    other MIDI tracks (their real notes stay in the prompt as conditioning). We
+    pick any one MIDI (non-audio) track as the target.
 
-    Returns (generated_score, gt_score, target_track_indices).
+    Request semantics (config.py:308-310): a bar not listed in `bars`/`mask_bars`
+    is CONTEXT. So:
+      * target MIDI track -> TrackPrompt(bars=[], autoregressive=True), notes
+        CLEARED in the Score so AR can't copy the ground truth.
+      * every other track -> TrackPrompt(bars=[]) (defaults): pure context, its
+        actual notes / AudioContext placeholders retained. NOT ignore=True
+        (ignore EXCLUDES a track from context entirely).
+
+    Returns (generated_score, gt_score, target_track_idx) or (None, gt, None).
     """
     import copy
     from midigpt.inference.config import GenerationRequest, InferenceConfig, TrackPrompt
 
     gt_score = tokenizer.decode(item["input_ids"], resample=True)
     gen_score = copy.deepcopy(gt_score)
-    prompts, target_tracks = [], []
+    if target is None or target >= len(gen_score.tracks) \
+            or getattr(gen_score.tracks[target], "track_type", None) == "audio":
+        return None, gt_score, None
+    prompts = []
     for t_idx, track in enumerate(gen_score.tracks):
-        if getattr(track, "track_type", None) == "audio":
-            prompts.append(TrackPrompt(id=t_idx, ignore=True))
-        else:
+        if t_idx == target:
             for bar in track.bars:
                 bar.notes = []  # don't let AR copy the GT target
-            prompts.append(TrackPrompt(id=t_idx, bars=[], autoregressive=True))
-            target_tracks.append(t_idx)
+            # Full-track generation: target bars are ALL the track's bars,
+            # autoregressive on (mask_bars is irrelevant here).
+            prompts.append(TrackPrompt(id=t_idx, bars=list(range(len(track.bars))),
+                                       autoregressive=True))
+        else:
+            prompts.append(TrackPrompt(id=t_idx, bars=[]))  # context (audio OR other MIDI)
     cfg = InferenceConfig(temperature=args.temperature, top_k=args.top_k,
                           top_p=args.top_p, seed=args.seed)
     req = GenerationRequest(tracks=prompts, config=cfg, audio_conditioning=audio_conditioning)
-    return engine.session(gen_score, req).run(), gt_score, target_tracks
+    return engine.session(gen_score, req).run(), gt_score, target
 
 
 # ---------------------------------------------------------------------------
@@ -442,24 +447,29 @@ def main() -> None:
     feats_gt = []
 
     for i, it in enumerate(items):
-        gt_full_notes = None
+        # Pick ONE MIDI target per piece, held fixed across conditions so
+        # real/mismatched/silence are compared like-for-like against the same GT.
+        gt_score = tokenizer.decode(it["input_ids"], resample=True)
+        midi_tracks = [t for t, trk in enumerate(gt_score.tracks)
+                       if getattr(trk, "track_type", None) != "audio"]
+        if not midi_tracks:
+            continue
+        target = rng.choice(midi_tracks)
+        gt_notes = track_notes(gt_score, target)
+        feats_gt.append(feature_vector(gt_notes))
         for cond in conditions:
             wavs = perturb_waveforms(it["audio_waveforms"], cond, rng, wav_pool)
             ac = build_audio_conditioning(
                 lit.audio_extractor, wavs, it["audio_track_indices"], it["bar_intervals"],
                 it["audio_bar_refs"], args.sample_rate, args.device)
             try:
-                gen_score, gt_score, target_tracks = generate_accompaniment(engine, tokenizer, it, ac, args)
+                gen_score, _, _ = generate_accompaniment(engine, tokenizer, it, ac, args, target)
             except Exception as e:
                 print(f"  piece {i} cond {cond}: generation failed: {repr(e)[:160]}", flush=True)
                 continue
-            gen_notes_by_t = target_track_notes(gen_score)
-            gt_notes_by_t = target_track_notes(gt_score)
-            gen_notes = [n for t in gen_notes_by_t.values() for n in t]
-            gt_notes = [n for t in gt_notes_by_t.values() for n in t]
-            if gt_full_notes is None:
-                gt_full_notes = gt_notes
-                feats_gt.append(feature_vector(gt_notes))
+            if gen_score is None:
+                continue
+            gen_notes = track_notes(gen_score, target)
             _, _, f1 = note_prf1(gen_notes, gt_notes, onset_tol=args.onset_tol)
             f1s[cond].append(f1)
             pg, pr = _pitch_class_hist(gen_notes), _pitch_class_hist(gt_notes)
