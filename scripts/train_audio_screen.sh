@@ -136,6 +136,13 @@ export MIDIGPT_CACHE="/scratch/triana24/MIDI-GPT/.midigpt_cache"
 export HF_HOME="/scratch/triana24/MIDI-GPT/.hf_cache"
 export HF_HUB_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
+# wandb online init hangs ~90s then crashes with CommError on air-gapped
+# compute (can't reach wandb.ai / sentry) — this is what actually killed the
+# dac full run after 55 min. Force offline: wandb writes a local run dir (sync
+# it from the login node later if wanted), while the durable metrics source is
+# now MetricsJSONLogger (metrics.jsonl / [METRICS] stdout) + CSVLogger.
+export WANDB_MODE=offline
+export WANDB_SILENT=true
 # NOT HF_DATASETS_OFFLINE: the training data is LOCAL parquet
 # (load_dataset("parquet", data_files=...)), no HF dataset download involved,
 # and with datasets>=4.0 (the -check/iso venvs) that flag triggers
