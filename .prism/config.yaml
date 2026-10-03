@@ -3,6 +3,18 @@ defaults:
   scratch_root: /scratch/triana24
   venv_path: /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning
   user: triana24
+  # Named venvs beyond venv_path, so `prism venv check/sync` sees the
+  # per-extractor -check venvs the audio screen selects at runtime. Set once
+  # in defaults (merges into every cluster — fixed in prism f3be478).
+  # venv-same-check-iso is fir-only (isolated torch 2.7.1 build); a check
+  # across all clusters will correctly flag it absent elsewhere.
+  venvs:
+    venv-audio-conditioning: /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning
+    venv-mert-check: /scratch/triana24/MIDI-GPT/venvs/venv-mert-check
+    venv-muq-check: /scratch/triana24/MIDI-GPT/venvs/venv-muq-check
+    venv-sheetsage2-check: /scratch/triana24/MIDI-GPT/venvs/venv-sheetsage2-check
+    venv-same-check: /scratch/triana24/MIDI-GPT/venvs/venv-same-check
+    venv-same-check-iso: /scratch/triana24/MIDI-GPT/venvs/venv-same-check-iso
 
 state:
   backend: local   # distribute-mode jobs don't use the Gist backend at all
@@ -28,13 +40,6 @@ clusters:
     # project's MIDI-GPT/venv-<name> -- pre-existing layout, not worth
     # renaming/breaking just for consistency.
     venv_path: /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning
-    venvs:   # per-cluster (defaults.venvs doesn't merge like venv_path); lets `prism venv check/sync` see the -check venvs
-      venv-audio-conditioning: /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning
-      venv-mert-check: /scratch/triana24/MIDI-GPT/venvs/venv-mert-check
-      venv-muq-check: /scratch/triana24/MIDI-GPT/venvs/venv-muq-check
-      venv-sheetsage2-check: /scratch/triana24/MIDI-GPT/venvs/venv-sheetsage2-check
-      venv-same-check: /scratch/triana24/MIDI-GPT/venvs/venv-same-check
-      venv-same-check-iso: /scratch/triana24/MIDI-GPT/venvs/venv-same-check-iso
     env:
       MIDIGPT_CACHE: /scratch/triana24/MIDI-GPT/.midigpt_cache
       HF_TOKEN: "${HF_TOKEN}"
@@ -76,13 +81,6 @@ clusters:
     worktrees:
       feature/audio-conditioning: /scratch/triana24/MIDI-GPT/worktree-audio-conditioning
     venv_path: /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning
-    venvs:   # per-cluster (defaults.venvs doesn't merge like venv_path); lets `prism venv check/sync` see the -check venvs
-      venv-audio-conditioning: /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning
-      venv-mert-check: /scratch/triana24/MIDI-GPT/venvs/venv-mert-check
-      venv-muq-check: /scratch/triana24/MIDI-GPT/venvs/venv-muq-check
-      venv-sheetsage2-check: /scratch/triana24/MIDI-GPT/venvs/venv-sheetsage2-check
-      venv-same-check: /scratch/triana24/MIDI-GPT/venvs/venv-same-check
-      venv-same-check-iso: /scratch/triana24/MIDI-GPT/venvs/venv-same-check-iso
     env:
       TMPDIR: /scratch/triana24/.tmp
       PIP_CACHE_DIR: /scratch/triana24/.cache/pip
@@ -129,13 +127,6 @@ clusters:
     worktrees:
       feature/audio-conditioning: /scratch/triana24/MIDI-GPT/worktree-audio-conditioning
     venv_path: /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning
-    venvs:   # per-cluster (defaults.venvs doesn't merge like venv_path); lets `prism venv check/sync` see the -check venvs
-      venv-audio-conditioning: /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning
-      venv-mert-check: /scratch/triana24/MIDI-GPT/venvs/venv-mert-check
-      venv-muq-check: /scratch/triana24/MIDI-GPT/venvs/venv-muq-check
-      venv-sheetsage2-check: /scratch/triana24/MIDI-GPT/venvs/venv-sheetsage2-check
-      venv-same-check: /scratch/triana24/MIDI-GPT/venvs/venv-same-check
-      venv-same-check-iso: /scratch/triana24/MIDI-GPT/venvs/venv-same-check-iso
     env:
       TMPDIR: /scratch/triana24/.tmp
       PIP_CACHE_DIR: /scratch/triana24/.cache/pip
@@ -173,13 +164,6 @@ clusters:
     worktrees:
       feature/audio-conditioning: /scratch/triana24/MIDI-GPT/worktree-audio-conditioning
     venv_path: /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning
-    venvs:   # per-cluster (defaults.venvs doesn't merge like venv_path); lets `prism venv check/sync` see the -check venvs
-      venv-audio-conditioning: /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning
-      venv-mert-check: /scratch/triana24/MIDI-GPT/venvs/venv-mert-check
-      venv-muq-check: /scratch/triana24/MIDI-GPT/venvs/venv-muq-check
-      venv-sheetsage2-check: /scratch/triana24/MIDI-GPT/venvs/venv-sheetsage2-check
-      venv-same-check: /scratch/triana24/MIDI-GPT/venvs/venv-same-check
-      venv-same-check-iso: /scratch/triana24/MIDI-GPT/venvs/venv-same-check-iso
     env:
       TMPDIR: /scratch/triana24/.tmp
       PIP_CACHE_DIR: /scratch/triana24/.cache/pip
@@ -219,13 +203,6 @@ clusters:
     worktrees:
       feature/audio-conditioning: /scratch/triana24/MIDI-GPT/worktree-audio-conditioning
     venv_path: /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning
-    venvs:   # per-cluster (defaults.venvs doesn't merge like venv_path); lets `prism venv check/sync` see the -check venvs
-      venv-audio-conditioning: /scratch/triana24/MIDI-GPT/venvs/venv-audio-conditioning
-      venv-mert-check: /scratch/triana24/MIDI-GPT/venvs/venv-mert-check
-      venv-muq-check: /scratch/triana24/MIDI-GPT/venvs/venv-muq-check
-      venv-sheetsage2-check: /scratch/triana24/MIDI-GPT/venvs/venv-sheetsage2-check
-      venv-same-check: /scratch/triana24/MIDI-GPT/venvs/venv-same-check
-      venv-same-check-iso: /scratch/triana24/MIDI-GPT/venvs/venv-same-check-iso
     env:
       TMPDIR: /scratch/triana24/.tmp
       PIP_CACHE_DIR: /scratch/triana24/.cache/pip
