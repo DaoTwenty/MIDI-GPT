@@ -1,0 +1,28 @@
+name: audio-screen-sheetsage2
+# sheetsage2 only. It loads m-a-p/SheetSage2 by HF hub id (trust_remote_code),
+# so it must run on a cluster whose HF_HOME hub cache has that snapshot. It's
+# present on nibi + narval (via prism fetch); fir + rorqual are being
+# backfilled via globus. Pin to narval/nibi until all clusters have it.
+# Dry-run with `--env MAX_STEPS=5`; full run = no override (1500).
+script: bash /scratch/triana24/MIDI-GPT/worktree-audio-conditioning/scripts/train_audio_screen.sh
+args: "{matrix}"
+mode: distribute
+matrix:
+  max_per_cluster: 1
+  values:
+    - "sheetsage2"
+resources:
+  gpus: 1
+  cpus: 12
+  mem_per_cpu_gb: 6
+  time: "03:00:00"
+requires_files:
+  - "MIDI-GPT/runs/yellow_medium-20260621-115325/model_final.safetensors"
+  - "MIDI-GPT/data/v2.0.0/train"
+  - "MIDI-GPT/data/slakh2100/slakh2100_flac_redux/train"
+  - "MIDI-GPT/worktree-audio-conditioning/soundfonts/FluidR3_GM.sf2"
+requires_hf_models:
+  - "m-a-p/SheetSage2"
+  - "FacebookAI/xlm-roberta-base"
+requires_inodes: 120000
+requires_space_gb: 130
