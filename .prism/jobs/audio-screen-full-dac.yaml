@@ -1,0 +1,22 @@
+name: audio-screen-full-dac
+# Full 1500-step run for dac after its MAX_STEPS=5 dry run passed (5/5).
+script: bash /scratch/triana24/MIDI-GPT/worktree-audio-conditioning/scripts/train_audio_screen.sh
+args: "{matrix}"
+mode: distribute
+matrix:
+  max_per_cluster: 1
+  values:
+    - "dac"
+resources:
+  gpus: 1
+  cpus: 12
+  mem_per_cpu_gb: 6
+  time: "03:00:00"
+requires_files:
+  - "MIDI-GPT/runs/yellow_medium-20260621-115325/model_final.safetensors"
+  - "MIDI-GPT/data/v2.0.0/train"
+  - "MIDI-GPT/data/slakh2100/slakh2100_flac_redux/train"
+  - "MIDI-GPT/worktree-audio-conditioning/soundfonts/FluidR3_GM.sf2"
+  - "MIDI-GPT/hf_cache/dac_44khz"
+requires_inodes: 120000
+requires_space_gb: 130

@@ -19,7 +19,7 @@ resources:
   gpus: 1
   cpus: 12
   mem_per_cpu_gb: 6
-  time: "03:00:00"
+  time: "11:59:00"   # SAME-L (852M) is the heaviest extractor; 1500 steps hit the 3h cap on an earlier full run
 
 requires_files:
   - "MIDI-GPT/runs/yellow_medium-20260621-115325/model_final.safetensors"
