@@ -136,7 +136,12 @@ export MIDIGPT_CACHE="/scratch/triana24/MIDI-GPT/.midigpt_cache"
 export HF_HOME="/scratch/triana24/MIDI-GPT/.hf_cache"
 export HF_HUB_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
-export HF_DATASETS_OFFLINE=1
+# NOT HF_DATASETS_OFFLINE: the training data is LOCAL parquet
+# (load_dataset("parquet", data_files=...)), no HF dataset download involved,
+# and with datasets>=4.0 (the -check/iso venvs) that flag triggers
+# "NotImplementedError: Loading a dataset cached in a LocalFileSystem is not
+# supported" and kills the run. HUB/TRANSFORMERS offline (above) are what the
+# air-gapped model loads actually need.
 
 source "$VENV/bin/activate"
 cd "$PROJECT"
