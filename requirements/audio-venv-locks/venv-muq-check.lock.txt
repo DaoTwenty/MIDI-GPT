@@ -1,7 +1,6 @@
 # pip freeze of venv-muq-check on narval (a100), 2026-10-03 — reference lock
-# Regenerated after adding training-loop deps (lightning/wandb/einops)
-# the -check venvs were missing. See scripts/setup_audio_check_venvs.sh.
--e git+ssh://git@github.com/DaoTwenty/MIDI-GPT-private.git@02237a153372f2e299e6eebe13855bd55cc25732#egg=midigpt&subdirectory=../../../MIDI-GPT/worktree-audio-conditioning
+# Full [train] runtime: lightning/wandb/datasets/python-dotenv + einops; extractor pins intact.
+-e git+ssh://git@github.com/DaoTwenty/MIDI-GPT-private.git@a70d3f4772d1af7d709f20f543ec8d6f1b6ab32a#egg=midigpt&subdirectory=../../../MIDI-GPT/worktree-audio-conditioning
 absl_py==2.3.1+computecanada
 accelerate==1.11.0+computecanada
 aiohappyeyeballs==2.6.1+computecanada
@@ -17,8 +16,8 @@ cffi==2.1.0+computecanada
 charset_normalizer==3.4.4+computecanada
 click==8.5.0+computecanada
 cloudpickle==3.1.2+computecanada
-datasets==4.4.1
-dill==0.4.0+computecanada
+datasets==2.14.4+computecanada
+dill==0.3.7+computecanada
 distlib @ file:///tmp/ebuser/avx2/Python/3.11.5/GCCcore-12.3.0/distlib/distlib-0.3.7
 easydict==1.13+computecanada
 editables @ file:///tmp/ebuser/avx2/Python/3.11.5/GCCcore-12.3.0/editables/editables-0.5
@@ -44,15 +43,15 @@ jinja2==3.1.6+computecanada
 joblib==1.6.0+computecanada
 lazy_loader==0.6+computecanada
 librosa==0.11.0+computecanada
-lightning==2.6.6+computecanada
 lightning_utilities==0.15.3+computecanada
+lightning==2.6.6+computecanada
 llvmlite==0.47.0+computecanada
 Markdown==3.10
 MarkupSafe==3.0.2+computecanada
 miditok==3.0.6.post1
 msgpack==1.1.2+computecanada
 multidict==6.7.0+computecanada
-multiprocess==0.70.18+computecanada
+multiprocess==0.70.15+computecanada
 muq==0.1.0
 networkx==3.5+computecanada
 nnaudio==0.3.4
@@ -71,11 +70,12 @@ propcache==0.4.1+computecanada
 protobuf==6.33.0+computecanada
 pybind11==3.1.0+computecanada
 pycparser==3.0+computecanada
-pydantic==2.13.5+computecanada
 pydantic_core==2.46.5+computecanada
+pydantic==2.13.5+computecanada
 pyfluidsynth==1.4.0
 pyparsing @ file:///tmp/ebuser/avx2/Python/3.11.5/GCCcore-12.3.0/pyparsing/pyparsing-3.1.1
 pySmartDL==1.3.4+computecanada
+python-dotenv==1.2.4
 pytorch-lightning==2.6.6
 PyYAML==6.0.2+computecanada
 regex==2024.11.6+computecanada
@@ -91,8 +91,8 @@ sniffio==1.3.1+computecanada
 soundfile==0.14.0
 soxr==0.5.0.post1+computecanada
 symusic==0.5.0+computecanada
-tensorboard==2.20.0+computecanada
 tensorboard_data_server==0.7.2+computecanada
+tensorboard==2.20.0+computecanada
 threadpoolctl==3.7.0+computecanada
 tokenizers==0.21.1+computecanada
 tomli @ file:///tmp/ebuser/avx2/Python/3.11.5/GCCcore-12.3.0/tomli/tomli-2.0.1

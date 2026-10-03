@@ -60,3 +60,14 @@ requires_imports:          # checked in venv-audio-conditioning (the job's venv)
   - einops
 requires_inodes: 120000    # the extracted Slakh + venvs are inode-heavy (1e6/user cap)
 requires_space_gb: 130
+# Extractors that load by HF hub repo id (not a local staged dir): sheetsage2
+# (trust_remote_code, needs the full snapshot + its xlm-roberta tokenizer) and
+# music2latent. Compute nodes are air-gapped, so these must be pre-cached on
+# the login node — `prism fetch audio-screen` does that; the job then loads
+# them offline (HF_HUB_OFFLINE, set in train_audio_screen.sh). The local-path
+# extractors (mert/dac/muq/same/yourmt3/muscriptor) are covered by
+# requires_files / pre-staged dirs, not here.
+requires_hf_models:
+  - "m-a-p/SheetSage2"
+  - "FacebookAI/xlm-roberta-base"
+  - "SonyCSLParis/music2latent"
