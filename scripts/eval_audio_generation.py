@@ -87,8 +87,12 @@ def build_lit_module(args, tokenizer, encoder_config):
         extractor_type=args.audio_extractor, weights_path=args.audio_weights,
         feature_dim=args.feature_dim,
     )
+    # The adapter's input dim MUST match the extractor's actual output dim
+    # (each extractor has a fixed feature_dim), else the first adapter layer
+    # shape-mismatches. Derive it from the loaded extractor, not the CLI default.
+    feat_dim = int(getattr(extractor, "feature_dim", args.feature_dim))
     adapter = AudioToMidiAdapter(
-        feature_dim=args.feature_dim, model_dim=model_dim,
+        feature_dim=feat_dim, model_dim=model_dim,
         num_tokens_per_bar=1, pooling_strategy=args.pooling, fusion_strategy=args.fusion,
     )
     lit = AudioConditionedLightningModule(
