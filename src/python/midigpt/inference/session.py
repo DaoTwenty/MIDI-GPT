@@ -25,6 +25,49 @@ from midigpt.inference.config import (
 log = logging.getLogger(__name__)
 
 
+def _coerce_frames_3d(x):
+    """Return a float32 (1, T, D) tensor — the audio adapter pools raw frames
+    internally, so it needs a batched frame sequence, not a pre-pooled vector."""
+    import torch
+    if not isinstance(x, torch.Tensor):
+        x = torch.as_tensor(x, dtype=torch.float32)
+    x = x.float()
+    if x.ndim == 1:        # (D,)   -> (1, 1, D)
+        x = x.unsqueeze(0).unsqueeze(0)
+    elif x.ndim == 2:      # (T, D) -> (1, T, D)
+        x = x.unsqueeze(0)
+    return x
+
+
+def _build_audio_soft_replacements(audio_conditioning, ctx_tokens, vocab, adapter):
+    """Bind audio features to the [AudioContext] placeholder positions found in
+    THIS prefill token stream.
+
+    Conditioning for this model is nothing more than replacing the audio
+    placeholder tokens' embeddings with audio-derived soft embeddings (the MIDI
+    sampling is otherwise identical to normal generation). The caller supplies
+    one ``(bar_frames, track_frames[, pos])`` per audio bar, IN THE ORDER the
+    encoder emits placeholders (the same track/bar order
+    ``AudioTransitionDataset`` builds ``audio_bar_refs``). We locate the real
+    ``[AudioContext]`` token indices in ``ctx_tokens`` and bind features to them
+    positionally, so callers never have to predict the engine's internal token
+    layout. Any caller-provided absolute ``pos`` (``feat[2]``) is ignored.
+
+    If there are fewer features than placeholders (or vice versa) we bind the
+    common prefix via ``zip`` — a length mismatch is a caller bug worth logging
+    upstream, but we never index past either list.
+    """
+    if not vocab.has(_core.TokenType.AudioContext):
+        return []
+    ac_id = vocab.encode_val(_core.TokenType.AudioContext, 0)
+    positions = [i for i, t in enumerate(ctx_tokens) if t == ac_id]
+    out = []
+    for feat, pos in zip(audio_conditioning, positions):
+        soft_emb = adapter(_coerce_frames_3d(feat[0]), track_frames=_coerce_frames_3d(feat[1]))
+        out.append((pos, soft_emb.squeeze(0)))
+    return out
+
+
 class TokenLogger:
     """Collects per-token generation stats and bar summaries.
 
@@ -596,6 +639,11 @@ class SamplingSession:
         # (track, bar)). Used for client-side comparison/debug; pure read-only.
         self.prompt_state_sink = None
         self._snapshot_sent = False
+        # Optional per-step logits callback for eval/metrics (e.g. Tier-B
+        # generation eval gathering distributions). Called as
+        # logits_sink(logits_seq, is_prefill) after each forward; pure
+        # read-only, never mutate logits. Left None in normal generation.
+        self.logits_sink = None
         # Optional TokenLogger — attach before calling run() to get full token
         # and context diagnostics written to a JSONL file.
         self.token_logger: "TokenLogger | None" = None
@@ -1545,17 +1593,18 @@ class SamplingSession:
                 # steps don't re-encode).
                 _soft_replacements = None
                 if is_prefill and self._request.audio_conditioning and self._engine._audio_adapter is not None:
-                    _soft_replacements = []
-                    ctx_tokens = state.context_tokens()
-                    for bar_frames, track_frames, pos in self._request.audio_conditioning:
-                        if pos < len(ctx_tokens):
-                            bar_t = torch.tensor(bar_frames, dtype=torch.float32).unsqueeze(0) if not isinstance(bar_frames, torch.Tensor) else bar_frames.unsqueeze(0) if bar_frames.ndim == 1 else bar_frames
-                            track_t = torch.tensor(track_frames, dtype=torch.float32).unsqueeze(0) if not isinstance(track_frames, torch.Tensor) else track_frames.unsqueeze(0) if track_frames.ndim == 1 else track_frames
-                            soft_emb = self._engine._audio_adapter(bar_t, track_frames=track_t)
-                            _soft_replacements.append((pos, soft_emb.squeeze(0)))
+                    _soft_replacements = _build_audio_soft_replacements(
+                        self._request.audio_conditioning, state.context_tokens(),
+                        self._engine._tokenizer._vocab, self._engine._audio_adapter,
+                    )
                 logits_seq = kv.forward(ctx, key_mask=km, position_ids=pos_ids, soft_token_replacements=_soft_replacements)
                 if logits_seq.device.type == "mps":
                     torch.mps.synchronize()
+                if self.logits_sink is not None:
+                    try:
+                        self.logits_sink(logits_seq, is_prefill)
+                    except Exception as exc:
+                        log.warning("logits_sink failed: %s", exc)
                 if self.enable_profiling:
                     self.model_forward_time += time.perf_counter() - t_fwd
 
@@ -2037,13 +2086,10 @@ class SamplingSession:
                 # during prefill.
                 _soft_replacements = None
                 if is_prefill and self._request.audio_conditioning and self._engine._audio_adapter is not None:
-                    _soft_replacements = []
-                    for bar_frames, track_frames, pos in self._request.audio_conditioning:
-                        if pos < len(_ctx_toks):
-                            bar_t = torch.tensor(bar_frames, dtype=torch.float32).unsqueeze(0) if not isinstance(bar_frames, torch.Tensor) else bar_frames.unsqueeze(0) if bar_frames.ndim == 1 else bar_frames
-                            track_t = torch.tensor(track_frames, dtype=torch.float32).unsqueeze(0) if not isinstance(track_frames, torch.Tensor) else track_frames.unsqueeze(0) if track_frames.ndim == 1 else track_frames
-                            soft_emb = self._engine._audio_adapter(bar_t, track_frames=track_t)
-                            _soft_replacements.append((pos, soft_emb.squeeze(0)))
+                    _soft_replacements = _build_audio_soft_replacements(
+                        self._request.audio_conditioning, _ctx_toks,
+                        self._engine._tokenizer._vocab, self._engine._audio_adapter,
+                    )
                 logits_seq = kv.forward(ctx, soft_token_replacements=_soft_replacements)
                 if logits_seq.device.type == "mps":
                     torch.mps.synchronize()

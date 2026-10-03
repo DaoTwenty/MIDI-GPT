@@ -138,25 +138,27 @@ def extract_frames_per_track(extractor, waveforms, track_indices, sample_rate, d
     return frames, total_duration, track_to_local
 
 
-def build_audio_conditioning(extractor, waveforms, track_indices, bar_intervals, refs, positions,
+def build_audio_conditioning(extractor, waveforms, track_indices, bar_intervals, refs,
                              sample_rate, device):
-    """Produce request.audio_conditioning = list of (bar_frames_3d, track_frames_3d, pos).
+    """Produce request.audio_conditioning = list of (bar_frames_3d, track_frames_3d).
 
-    Per the API map: pass RAW frames as 3-D (1, T, D) (the adapter pools
-    internally; the session only auto-unsqueezes 1-D), matching the training
-    forward exactly.
+    One entry per audio bar, in `refs` order (track-major, bar order) — the same
+    order the encoder emits [AudioContext] placeholders. The engine now binds
+    these to its own placeholder positions (see _build_audio_soft_replacements in
+    session.py), so NO token position is needed here. Frames are raw (1, T, D);
+    the adapter pools internally.
     """
     if not waveforms or not refs:
         return []
     frames, total_duration, track_to_local = extract_frames_per_track(
         extractor, waveforms, track_indices, sample_rate, device)
     out = []
-    for (t_idx, b_idx), pos in zip(refs, positions):
+    for (t_idx, b_idx) in refs:
         if t_idx not in track_to_local:
             continue
         t_frames = frames[track_to_local[t_idx]]                                   # (T_total, D)
         b_frames = extractor.slice_bar_frames(t_frames, total_duration, [bar_intervals[b_idx]])[0]
-        out.append((b_frames.unsqueeze(0), t_frames.unsqueeze(0), int(pos)))       # (1,T,D)
+        out.append((b_frames.unsqueeze(0), t_frames.unsqueeze(0)))                 # (1,T,D) each
     return out
 
 
@@ -325,34 +327,39 @@ def frechet_distance(gen_feats, gt_feats):
 # Generation of the target tracks for one piece under one condition
 # ---------------------------------------------------------------------------
 
-def generate_target_score(engine, tokenizer, item, audio_conditioning, args):
-    """Build a GenerationRequest that regenerates the TARGET (non-audio) tracks
-    conditioned on the context (audio) tracks, run the engine, return the Score.
+def generate_accompaniment(engine, tokenizer, item, audio_conditioning, args):
+    """Generate the TARGET (non-audio) tracks conditioned on the context (audio)
+    tracks, via the standard engine — only the conditioning differs.
 
-    The windowed GT Score (decoded from the item's tokens) supplies the context
-    tracks (track_type=='audio') and the bar layout; TrackPrompt asks the engine
-    to (re)generate each target track's bars. audio_conditioning injects the
-    context-track features at the [AudioContext] positions during prefill.
+    Request idiom (inference.md "Multi-track AR with leading context"):
+      * audio (context) tracks -> TrackPrompt(ignore=True): left untouched; their
+        [AudioContext] placeholders carry the injected audio soft embeddings.
+      * target (MIDI) tracks    -> TrackPrompt(bars=[], autoregressive=True):
+        generated fully from scratch — we also CLEAR their notes in the Score
+        passed to the engine so generation can't copy the ground truth.
+    audio_conditioning is the position-free (bar_frames, track_frames) list; the
+    engine binds it to its own placeholder positions.
 
-    NOTE: this is the one part not exercisable locally (needs the full model on
-    GPU); the request shape follows the mapped engine API and the training
-    item's own track/bar structure. Verify on first cluster run.
+    Returns (generated_score, gt_score, target_track_indices).
     """
+    import copy
     from midigpt.inference.config import GenerationRequest, InferenceConfig, TrackPrompt
 
     gt_score = tokenizer.decode(item["input_ids"], resample=True)
-    target_tracks = [i for i, t in enumerate(gt_score.tracks)
-                     if getattr(t, "track_type", None) != "audio"]
-    prompts = [
-        TrackPrompt(id=t_idx, bars=list(range(len(gt_score.tracks[t_idx].bars))),
-                    autoregressive=True)
-        for t_idx in target_tracks
-    ]
+    gen_score = copy.deepcopy(gt_score)
+    prompts, target_tracks = [], []
+    for t_idx, track in enumerate(gen_score.tracks):
+        if getattr(track, "track_type", None) == "audio":
+            prompts.append(TrackPrompt(id=t_idx, ignore=True))
+        else:
+            for bar in track.bars:
+                bar.notes = []  # don't let AR copy the GT target
+            prompts.append(TrackPrompt(id=t_idx, bars=[], autoregressive=True))
+            target_tracks.append(t_idx)
     cfg = InferenceConfig(temperature=args.temperature, top_k=args.top_k,
                           top_p=args.top_p, seed=args.seed)
     req = GenerationRequest(tracks=prompts, config=cfg, audio_conditioning=audio_conditioning)
-    session = engine.session(gt_score, req)
-    return session.run(), gt_score, target_tracks
+    return engine.session(gen_score, req).run(), gt_score, target_tracks
 
 
 # ---------------------------------------------------------------------------
@@ -440,9 +447,9 @@ def main() -> None:
             wavs = perturb_waveforms(it["audio_waveforms"], cond, rng, wav_pool)
             ac = build_audio_conditioning(
                 lit.audio_extractor, wavs, it["audio_track_indices"], it["bar_intervals"],
-                it["audio_bar_refs"], it["audio_bar_positions"], args.sample_rate, args.device)
+                it["audio_bar_refs"], args.sample_rate, args.device)
             try:
-                gen_score, gt_score, target_tracks = generate_target_score(engine, tokenizer, it, ac, args)
+                gen_score, gt_score, target_tracks = generate_accompaniment(engine, tokenizer, it, ac, args)
             except Exception as e:
                 print(f"  piece {i} cond {cond}: generation failed: {repr(e)[:160]}", flush=True)
                 continue
