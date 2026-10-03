@@ -34,6 +34,7 @@ import os
 import sys
 from pathlib import Path
 
+import lightning as L  # module-level: MetricsJSONLogger(L.Callback) is defined at import time
 import torch
 from torch.utils.data import DataLoader
 
