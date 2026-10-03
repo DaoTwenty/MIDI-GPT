@@ -21,6 +21,14 @@
 # min(8, cpus)). workers x CHUNK_WORKERS is sized to ~match allocated cores.
 set -euo pipefail
 
+# pyarrow lives in the Alliance `arrow` module (these venvs are
+# --system-site-packages), not pip-installed. Only fir auto-loads it via
+# global.yaml modules:, so load the stack here exactly like
+# train_audio_screen.sh does — otherwise dataset.py's `import pyarrow` dies
+# with ModuleNotFoundError on nibi/rorqual/narval.
+module purge
+module load python/3.11.5 gcc/12.3 arrow/19.0.1 cmake/3.31.0
+
 PROJECT="/scratch/triana24/MIDI-GPT/worktree-audio-conditioning"
 ENC_CFG="$PROJECT/models/amber_encoder.json"
 TRAIN_GLOB="/scratch/triana24/MIDI-GPT/data/v2.0.0/train/*.parquet"
